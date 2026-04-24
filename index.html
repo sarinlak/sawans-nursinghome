@@ -258,7 +258,35 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);min
 .pslot{aspect-ratio:1;border-radius:9px;border:2px dashed var(--border);background:var(--sky-l);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;font-size:22px;gap:3px;}
 .pslot span{font-size:11px;color:var(--muted);}
 
-/* appointment entries */
+/* handover */
+.hv-card{background:#fff;border-radius:12px;box-shadow:var(--shadow);border:1.5px solid var(--border);margin-bottom:10px;overflow:hidden;}
+.hv-head{display:flex;align-items:center;justify-content:space-between;padding:10px 13px;background:var(--bg);cursor:pointer;}
+.hv-name{font-size:14px;font-weight:600;color:var(--text);}
+.hv-room{font-size:11px;color:var(--muted);margin-top:1px;}
+.hv-status{display:flex;gap:5px;align-items:center;flex-wrap:wrap;}
+.hv-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.hv-body{padding:12px 13px;border-top:1px solid var(--border);}
+.hv-sec{margin-bottom:10px;}
+.hv-sl{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px;}
+.hv-row{display:flex;align-items:flex-start;gap:7px;padding:4px 0;border-bottom:1px solid #EEF4FC;font-size:13px;}
+.hv-row:last-child{border-bottom:none;}
+.hv-lbl{color:var(--muted);min-width:90px;font-size:12px;}
+.hv-val{flex:1;color:var(--text);font-weight:500;}
+/* checklist risk */
+.risk-box{border-radius:9px;padding:8px 11px;margin-bottom:6px;border:1.5px solid var(--border);background:var(--bg);}
+.risk-title{font-size:12px;font-weight:700;margin-bottom:5px;}
+.risk-item{display:flex;align-items:center;gap:7px;padding:4px 0;font-size:12px;}
+.risk-ck{width:20px;height:20px;border-radius:4px;border:2px solid var(--border);background:#fff;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .18s;}
+.risk-ck.on{background:var(--green);border-color:var(--green);}
+.risk-ck.on::after{content:'✓';color:#fff;font-size:11px;font-weight:800;}
+/* io */
+.io-row{display:flex;gap:8px;align-items:center;margin:4px 0;}
+.io-lbl{font-size:12px;color:var(--muted);min-width:80px;}
+.io-inp{width:90px;border:1.5px solid var(--border);border-radius:7px;padding:5px 8px;font-family:'Sarabun',sans-serif;font-size:14px;font-weight:600;text-align:center;outline:none;background:#fff;}
+.io-unit{font-size:12px;color:var(--muted);}
+.io-bal{font-size:13px;font-weight:700;padding:4px 10px;border-radius:8px;}
+.io-pos{color:var(--sky);background:var(--sky-l);}
+.io-neg{color:var(--rose);background:var(--rose-l);}
 .appt-entry{display:flex;gap:6px;align-items:center;background:var(--bg);border-radius:8px;padding:6px 9px;border:1.5px solid var(--border);margin-bottom:5px;}
 .appt-entry input{border:none;background:transparent;font-family:'Sarabun',sans-serif;font-size:13px;outline:none;}
 .appt-entry .ae-date{width:130px;color:var(--sky);font-weight:600;}
@@ -317,6 +345,7 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);min
   <button class="tab" onclick="sw('general',this)"><span class="ti">🧹</span>งานทั่วไป</button>
   <button class="tab" onclick="sw('supply',this)"><span class="ti">📦</span>เบิกของ</button>
   <button class="tab" onclick="sw('history',this)"><span class="ti">📅</span>ประวัติ</button>
+  <button class="tab" onclick="sw('handover',this)"><span class="ti">📋</span>ส่งเวร</button>
   <button class="tab" onclick="sw('activity',this)"><span class="ti">📷</span>กิจกรรม</button>
   <button class="tab" onclick="sw('export',this)"><span class="ti">📤</span>รายงาน</button>
 </div>
@@ -368,6 +397,19 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);min
   <select class="fi" id="hpat" onchange="rHist()" style="margin-bottom:8px"><option value="">-- เลือกผู้สูงอายุ --</option></select>
   <input type="month" class="fi" id="hmon" style="margin-bottom:8px" onchange="rHist()">
   <div id="hList"><div class="empty"><div class="ei">📅</div>เลือกผู้สูงอายุและเดือน</div></div>
+</div>
+
+<!-- HANDOVER PAGE -->
+<div id="pg-handover" class="pg">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+    <div style="font-family:'Kanit',sans-serif;font-size:15px;font-weight:600">📋 ส่งเวร</div>
+    <div class="ssel" style="margin:0;gap:6px">
+      <button class="ssb aD" id="hvD" onclick="setHvSh('D')">☀️ เวร D</button>
+      <button class="ssb" id="hvN" onclick="setHvSh('N')">🌙 เวร N</button>
+    </div>
+  </div>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:10px" id="hvDateLbl"></div>
+  <div id="hvList"></div>
 </div>
 
 <!-- ACTIVITY -->
@@ -921,7 +963,7 @@ function init(){
   });
   renderAll();
 }
-function renderAll(){rWarn();rApptAlerts();rPats();rGenPat();rPampSummary();rSupplyPat();uSum();uExpSel();uHistSel();uPhotoFilter();rPhotos();rActs();uPhotoExportNote();}
+function renderAll(){rWarn();rApptAlerts();rPats();rGenPat();rPampSummary();rSupplyPat();uSum();uExpSel();uHistSel();uPhotoFilter();rPhotos();rActs();uPhotoExportNote();rHandover();}
 
 function sw(name,btn){
   document.querySelectorAll('.pg').forEach(p=>p.classList.remove('active'));
@@ -932,6 +974,7 @@ function sw(name,btn){
   if(name==='general'){rGenPat();rPampSummary();}
   if(name==='activity'){rPhotos();rActs();}
   if(name==='export')uPhotoExportNote();
+  if(name==='handover')rHandover();
 }
 
 // date
@@ -2191,6 +2234,258 @@ function importData(input){
     }
   };
   reader.readAsText(file,'utf-8');
+}
+
+// ============================================================
+// HANDOVER PAGE
+// ============================================================
+let hvSh='D';
+
+const RISK_FALL=[
+  'ยกไม้กั้นเตียง 2 ข้างตลอด',
+  'พยุงเดิน/ดูแลเคลื่อนย้าย',
+  'ระมัดระวังการเคลื่อนย้าย',
+];
+const RISK_PNEUMONIA=[
+  'จัดท่านอนศีรษะสูง 30 องศา',
+  'พลิกตะแคงทุก 2 ชั่วโมง',
+  'ตรวจสอบสายอาหารก่อนให้ทุกครั้ง',
+  'ป้อนอาหารท่านั่งศีรษะสูงกว่า 30 องศา',
+  'ระวังการสำลัก',
+];
+const RISK_UTI=[
+  'เช็ดทำความสะอาดทุกครั้งที่ขับถ่าย',
+  'เช็คสายสวนปัสสาวะ เช้า-เย็น',
+  'ดูแลให้น้ำดื่ม 1500-1800 ml/วัน',
+  'Milking สาย',
+  'สวมถุงมือเทปสาวะหนึ่งคู่ต่อคน',
+];
+const SLEEP_ITEMS=[
+  'จัดสิ่งแวดล้อมให้สงบ',
+  'งดนอนกลางวัน',
+  'ให้ยานอนหลับตามแผนการรักษา',
+  'ลดสิ่งรบกวนตอนกลางคืน',
+];
+const FIVE_RIGHT=[
+  'ถูกคน (Right Patient)',
+  'ถูกยา (Right Drug)',
+  'ถูกขนาด (Right Dose)',
+  'ถูกทาง (Right Route)',
+  'ถูกเวลา (Right Time)',
+];
+
+function setHvSh(sh){
+  hvSh=sh;
+  ['D','N'].forEach(s=>{
+    const b=document.getElementById('hv'+s);
+    if(b){b.className='ssb'+(s===sh?(s==='D'?' aD':' aN'):'');}
+  });
+  rHandover();
+}
+
+function eHvLog(pid,sh){
+  const date=getShiftDate(sh);
+  if(!S.logs[pid])S.logs[pid]={};
+  if(!S.logs[pid][date])S.logs[pid][date]={D:{},N:{}};
+  if(!S.logs[pid][date][sh])S.logs[pid][date][sh]={};
+  const lg=S.logs[pid][date][sh];
+  if(!lg.hv)lg.hv={riskFall:{},riskPneumonia:{},riskUTI:{},sleep:{},fiveRight:{},io:{intake:'',output:''}};
+  return lg.hv;
+}
+function gHvLog(pid,sh){
+  const date=getShiftDate(sh);
+  return((S.logs[pid]||{})[date]||{})[sh]?.hv||{riskFall:{},riskPneumonia:{},riskUTI:{},sleep:{},fiveRight:{},io:{intake:'',output:''}};
+}
+function tHvItem(pid,sh,cat,key){
+  const hv=eHvLog(pid,sh);
+  if(!hv[cat])hv[cat]={};
+  hv[cat][key]=!hv[cat][key];
+  save();rHandover();
+}
+function sHvIO(pid,sh,field,val){
+  const hv=eHvLog(pid,sh);
+  if(!hv.io)hv.io={intake:'',output:''};
+  hv.io[field]=val;
+  save();
+  // update balance display
+  const inp=parseInt(hv.io.intake)||0,out=parseInt(hv.io.output)||0;
+  const bal=inp-out;
+  const el=document.getElementById('io-bal-'+pid+'-'+sh);
+  if(el){el.textContent=(bal>=0?'+':'')+bal+' ml';el.className='io-bal '+(bal>=0?'io-pos':'io-neg');}
+}
+
+function rHandover(){
+  const el=document.getElementById('hvList');
+  const lbl=document.getElementById('hvDateLbl');
+  if(!el)return;
+  const shDate=getShiftDate(hvSh);
+  if(lbl)lbl.textContent=`${hvSh==='D'?'☀️ เวร D (08:00–16:00)':'🌙 เวร N (16:00–08:00)'} • ${fmtTH(shDate)}`;
+
+  if(!S.patients.length){el.innerHTML=`<div class="empty"><div class="ei">📋</div>ยังไม่มีผู้สูงอายุ</div>`;return;}
+
+  el.innerHTML=S.patients.map(p=>{
+    const lg=gLog(p.id,shDate,hvSh);
+    const hv=gHvLog(p.id,hvSh);
+    const v=lg.v||{};
+    const isOpen=oC['hv_'+p.id];
+    const ini=p.name.replace(/คุณ|นาย|นาง|นางสาว/g,'').trim().charAt(0)||'?';
+
+    // quick status dots
+    const vsDone=!!(v.bp||v.temp||v.hr);
+    const medsDone=(()=>{const sm=getMedsForShift(p,hvSh);const tot=sm.reduce((a,m)=>a+m.meals.length,0);if(!tot)return true;const done=sm.reduce((a,m)=>a+m.meals.filter(meal=>lg.meds?.[medKey(m.name,meal)]).length,0);return done===tot;})();
+    const stoolDone=lg.stool?.did!==null&&lg.stool?.did!==undefined;
+    const io=hv.io||{};const ioDone=!!(io.intake||io.output);
+
+    const dots=[
+      {done:vsDone,label:'V/S'},
+      {done:medsDone,label:'ยา'},
+      {done:stoolDone,label:'ขับถ่าย'},
+      {done:ioDone,label:'I/O'},
+    ];
+
+    return`<div class="hv-card">
+      <div class="hv-head" onclick="oC['hv_'+${p.id}]=!oC['hv_'+${p.id}];rHandover()">
+        <div style="display:flex;align-items:center;gap:9px">
+          <div class="av">${ini}</div>
+          <div>
+            <div class="hv-name">${p.name}</div>
+            <div class="hv-room">${p.room||''}${p.diag?' • '+p.diag:''}</div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+          <div class="hv-status">
+            ${dots.map(d=>`<div style="display:flex;align-items:center;gap:2px">
+              <div class="hv-dot" style="background:${d.done?'var(--green)':'var(--border)'}"></div>
+              <span style="font-size:10px;color:var(--muted)">${d.label}</span>
+            </div>`).join('')}
+          </div>
+          <span class="chv ${isOpen?'op':''}">▼</span>
+        </div>
+      </div>
+      <div class="${isOpen?'hv-body':'hv-body h'}">
+        ${rHvBody(p,hvSh,lg,hv,v)}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function rHvBody(p,sh,lg,hv,v){
+  const io=hv.io||{};
+  const inp=parseInt(io.intake)||0,out=parseInt(io.output)||0;
+  const bal=inp-out;
+
+  let h='';
+
+  // V/S summary
+  h+=`<div class="hv-sec"><div class="hv-sl">🩺 สัญญาณชีพ</div>`;
+  if(v.bp||v.temp||v.hr){
+    h+=`<div class="hv-row"><span class="hv-lbl">BP</span><span class="hv-val">${v.bp||'-'} mmHg</span></div>
+    <div class="hv-row"><span class="hv-lbl">T°C</span><span class="hv-val">${v.temp||'-'}</span></div>
+    <div class="hv-row"><span class="hv-lbl">HR</span><span class="hv-val">${v.hr||'-'} bpm | RR ${v.rr||'-'}/min | O2 ${v.o2||'-'}%</span></div>
+    ${v.status?`<div class="hv-row"><span class="hv-lbl">สถานะ</span><span class="hv-val" style="color:${v.status==='ปกติ'?'var(--green)':'var(--rose)'}">${v.status}</span></div>`:''}`;
+  } else h+=`<div style="font-size:12px;color:var(--rose)">⚠️ ยังไม่ได้บันทึก V/S</div>`;
+  h+=`</div>`;
+
+  // Meds summary
+  const shMeds=getMedsForShift(p,sh);
+  const totMed=shMeds.reduce((a,m)=>a+m.meals.length,0);
+  const doneMed=shMeds.reduce((a,m)=>a+m.meals.filter(meal=>lg.meds?.[medKey(m.name,meal)]).length,0);
+  h+=`<div class="hv-sec"><div class="hv-sl">💊 ยา (5 Right)</div>`;
+  if(totMed){
+    const allDone=doneMed===totMed;
+    h+=`<div class="hv-row"><span class="hv-lbl">สถานะยา</span><span class="hv-val" style="color:${allDone?'var(--green)':'var(--rose)'}">
+      ${allDone?'✅ ให้ยาครบทุกมื้อ':'⚠️ ให้ยา '+doneMed+'/'+totMed+' มื้อ'}</span></div>`;
+  }
+  // 5 Right checklist
+  h+=`<div style="margin-top:5px">${FIVE_RIGHT.map(item=>{
+    const done=hv.fiveRight?.[item]||false;
+    return`<div class="risk-item"><div class="risk-ck ${done?'on':''}" onclick="tHvItem(${p.id},'${sh}','fiveRight','${item.replace(/'/g,"\\'")}')"></div><span>${item}</span></div>`;
+  }).join('')}</div></div>`;
+
+  // Food summary
+  const isFeed=(p.foods||[]).some(f=>f.includes('Feed')||f.includes('สาย'));
+  h+=`<div class="hv-sec"><div class="hv-sl">🍽️ อาหาร</div>`;
+  if(isFeed){
+    const feedMeals=sh==='D'?[{k:'feed08',l:'08:00'},{k:'feed12',l:'12:00'}]:[{k:'feed16',l:'16:00'},{k:'feed20',l:'20:00'}];
+    feedMeals.forEach(ml=>{const fd=lg.food?.[ml.k]||{};const formula=fd.formula?' ('+fd.formula+')':'';
+      h+=`<div class="hv-row"><span class="hv-lbl">Feed ${ml.l}</span><span class="hv-val">${fd.feedDone===true?'✅ ครบ'+formula:fd.feedDone===false?'❌ ไม่ครบ'+(fd.feedNote?' – '+fd.feedNote:'')+formula:'—'}</span></div>`;
+    });
+  } else {
+    const meals=sh==='D'?[{k:'breakfast',l:'เช้า'},{k:'lunch',l:'เที่ยง'}]:[{k:'dinner',l:'เย็น'}];
+    meals.forEach(ml=>{const fd=lg.food?.[ml.k]||{};
+      h+=`<div class="hv-row"><span class="hv-lbl">อาหาร${ml.l}</span><span class="hv-val">${fd.type||''}${fd.amount?' '+fd.amount:''}${fd.selfFeed===true?' (ทานเอง)':fd.selfFeed===false?' (ป้อน)':''}</span></div>`;
+    });
+  }
+  h+=`</div>`;
+
+  // Stool/Urine
+  const st=stoolTxt(lg.stool);
+  h+=`<div class="hv-sec"><div class="hv-sl">🚽 ขับถ่าย</div>
+    <div class="hv-row"><span class="hv-lbl">อุจจาระ</span><span class="hv-val">${st||'ยังไม่บันทึก'}</span></div>
+    <div class="hv-row"><span class="hv-lbl">ปัสสาวะ</span><span class="hv-val">${lg.urine||'ยังไม่บันทึก'}</span></div>
+  </div>`;
+
+  // Intake / Output — optional
+  h+=`<div class="hv-sec"><div class="hv-sl">💧 Intake / Output น้ำ <span style="font-size:10px;font-weight:400;color:var(--muted)">(ไม่บังคับ)</span></div>
+    <div class="io-row">
+      <span class="io-lbl">Intake (น้ำเข้า)</span>
+      <input class="io-inp" type="number" placeholder="ml" value="${io.intake||''}" onchange="sHvIO(${p.id},'${sh}','intake',this.value)">
+      <span class="io-unit">ml</span>
+    </div>
+    <div class="io-row">
+      <span class="io-lbl">Output (ปัสสาวะ)</span>
+      <input class="io-inp" type="number" placeholder="ml" value="${io.output||''}" onchange="sHvIO(${p.id},'${sh}','output',this.value)">
+      <span class="io-unit">ml</span>
+    </div>
+    ${(io.intake||io.output)?`<div class="io-row">
+      <span class="io-lbl">Balance</span>
+      <span class="io-bal ${bal>=0?'io-pos':'io-neg'}" id="io-bal-${p.id}-${sh}">${(bal>=0?'+':'')+bal} ml</span>
+    </div>`:'<div style="font-size:11px;color:var(--muted);padding:3px 0">— ไม่บันทึก I/O สำหรับผู้สูงอายุรายนี้ —</div>'}
+  </div>`;
+
+  // Risk checklist
+  const risks=[
+    {cat:'riskFall',title:'⚠️ ป้องกันพลัดตกหกล้ม',items:RISK_FALL,color:'var(--orange)'},
+    {cat:'riskPneumonia',title:'🫁 ป้องกันปอดติดเชื้อ',items:RISK_PNEUMONIA,color:'var(--sky)'},
+    {cat:'riskUTI',title:'💧 ป้องกันติดเชื้อทางเดินปัสสาวะ',items:RISK_UTI,color:'var(--teal)'},
+  ];
+  h+=`<div class="hv-sec"><div class="hv-sl">✅ Checklist ความเสี่ยง</div>`;
+  risks.forEach(risk=>{
+    const allDone=risk.items.every(item=>hv[risk.cat]?.[item]);
+    h+=`<div class="risk-box" style="border-color:${allDone?'var(--green)':risk.color}">
+      <div class="risk-title" style="color:${risk.color}">${risk.title} ${allDone?'<span style="color:var(--green);font-size:11px">✅ ครบ</span>':''}</div>
+      ${risk.items.map(item=>{
+        const done=hv[risk.cat]?.[item]||false;
+        return`<div class="risk-item"><div class="risk-ck ${done?'on':''}" onclick="tHvItem(${p.id},'${sh}','${risk.cat}','${item.replace(/'/g,"\\'")}')"></div><span>${item}</span></div>`;
+      }).join('')}
+    </div>`;
+  });
+  h+=`</div>`;
+
+  // Sleep
+  h+=`<div class="hv-sec"><div class="hv-sl">😴 การนอนหลับ</div>
+    <div class="risk-box">
+      ${SLEEP_ITEMS.map(item=>{
+        const done=hv.sleep?.[item]||false;
+        return`<div class="risk-item"><div class="risk-ck ${done?'on':''}" onclick="tHvItem(${p.id},'${sh}','sleep','${item.replace(/'/g,"\\'")}')"></div><span>${item}</span></div>`;
+      }).join('')}
+    </div>
+  </div>`;
+
+  // Wounds if any
+  if((lg.wounds||[]).length){
+    h+=`<div class="hv-sec"><div class="hv-sl">🩹 แผล</div>
+      <div class="hv-row"><span class="hv-lbl">ตำแหน่ง</span><span class="hv-val">${lg.wounds.join(', ')}</span></div>
+      ${lg.woundNote?`<div class="hv-row"><span class="hv-lbl">รายละเอียด</span><span class="hv-val">${lg.woundNote}</span></div>`:''}
+    </div>`;
+  }
+
+  // Note
+  if(lg.note){h+=`<div class="hv-sec"><div class="hv-sl">📝 ปัญหาอื่นๆ</div>
+    <div style="font-size:13px;color:var(--text);line-height:1.6;background:var(--gold-l);border-radius:8px;padding:7px 10px;border:1px solid var(--gold)">${lg.note}</div>
+  </div>`;}
+
+  return h;
 }
 
 function cModal(id){document.getElementById(id).classList.remove('open');}
