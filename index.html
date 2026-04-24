@@ -797,6 +797,15 @@ const fmtTH=(d)=>new Date(d+'T00:00:00').toLocaleDateString('th-TH',{weekday:'lo
 const fmtShort=(d)=>new Date(d+'T00:00:00').toLocaleDateString('th-TH',{weekday:'short',month:'short',day:'numeric'});
 const daysDiff=(a,b)=>Math.round((new Date(a)-new Date(b))/(1000*60*60*24));
 
+// เวร N ดึงข้อมูลวันก่อนหน้าเสมอ (เวร N = 16.00น.วันก่อน – 08.00น.วันนี้)
+function getShiftDate(sh){
+  if(sh==='N'){
+    const dt=new Date(curDate+'T00:00:00');dt.setDate(dt.getDate()-1);
+    return dt.toLocaleDateString('en-CA');
+  }
+  return curDate;
+}
+
 function eLog(pid,date,sh){
   if(!S.logs[pid])S.logs[pid]={};
   if(!S.logs[pid][date])S.logs[pid][date]={D:{},N:{}};
@@ -1740,8 +1749,12 @@ function setExSh(sh){exSh=sh;['D','N','A'].forEach(s=>{const b=document.getEleme
 function buildRepText(){
   // simplified family report — no med details
   const ds=fmtTH(curDate);const fpid=document.getElementById('expat').value;
-  const shifts=exSh==='ALL'?['D','N']:[exSh];
+  const shifts=exSh==='ALL'?['N','D']:[exSh];
   const pats=fpid?S.patients.filter(p=>p.id==fpid):S.patients;
+
+  // เวร N ดึงข้อมูลจากวันก่อนหน้า เพราะเวร N คือ 16.00น.วันก่อน – 08.00น.วันนี้
+  // ใช้ global function getShiftDate(sh) แทน
+
   let rep=`🏠 สวรรค์เนอร์สซิ่งโฮม\n📅 ${ds}\n${'─'.repeat(30)}\n\n`;
   pats.forEach(p=>{
     const nsd=countNoStool(p.id);
@@ -1751,8 +1764,10 @@ function buildRepText(){
     if(p.appointment){const diff=daysDiff(p.appointment,tday());rep+=`🗓️ นัดพบแพทย์: ${p.appointment}${diff>=0?' (อีก '+diff+' วัน)':' (เกินกำหนด!)'}${p.doctor?' — '+p.doctor:''}\n`;}
     rep+='\n';
     shifts.forEach(sh=>{
-      const lg=gLog(p.id,curDate,sh);const v=lg.v||{};
-      rep+=`${sh==='D'?'☀️ เวร D (8-16น.)':'🌙 เวร N (16-8น.)'}\n`;
+      const shDate=getShiftDate(sh);
+      const lg=gLog(p.id,shDate,sh);const v=lg.v||{};
+      const shDateLabel=sh==='N'?` (${fmtShort(shDate)})`:'';
+      rep+=`${sh==='D'?'☀️ เวร D (8-16น.)':'🌙 เวร N (16-8น.)'}${shDateLabel}\n`;
       if(v.bp||v.temp||v.hr)rep+=`สัญญาณชีพ: T=${v.temp||'-'} HR=${v.hr||'-'}bpm RR=${v.rr||'-'}/min BP=${v.bp||'-'}mmhg O2sat=${v.o2||'-'}%\n`;
       if(v.status)rep+=`${v.status!=='ปกติ'?'⚠️ ':''}สถานะ: ${v.status}\n`;
       // Tasks — exclude housekeeping items, rename meals
@@ -1779,10 +1794,14 @@ function buildRepText(){
     });
     rep+=`${'─'.repeat(26)}\n\n`;
   });
-  // pampers total
-  let tD=0,tN=0;pats.forEach(p=>{if(shifts.includes('D'))tD+=gLog(p.id,curDate,'D').pampers||0;if(shifts.includes('N'))tN+=gLog(p.id,curDate,'N').pampers||0;});
-  if(tD+tN>0){rep+=`👶 สรุปแพมเพิสทั้งศูนย์\n`;if(shifts.includes('D'))rep+=`  เวร D: ${tD} ตัว\n`;if(shifts.includes('N'))rep+=`  เวร N: ${tN} ตัว\n`;rep+=`  รวม: ${tD+tN} ตัว\n\n`;}
-  // supply items for the day (per patient)
+  // pampers total — N shift uses previous day
+  let tD=0,tN=0;
+  pats.forEach(p=>{
+    if(shifts.includes('D'))tD+=gLog(p.id,curDate,'D').pampers||0;
+    if(shifts.includes('N'))tN+=gLog(p.id,getShiftDate('N'),'N').pampers||0;
+  });
+  if(tD+tN>0){rep+=`👶 สรุปแพมเพิสทั้งศูนย์\n`;if(shifts.includes('D'))rep+=`  เวร D (${fmtShort(curDate)}): ${tD} ตัว\n`;if(shifts.includes('N'))rep+=`  เวร N (${fmtShort(getShiftDate('N'))}): ${tN} ตัว\n`;rep+=`  รวม: ${tD+tN} ตัว\n\n`;}
+  // supply items
   const fpidSup=document.getElementById('expat').value;
   const supPats=fpidSup?S.patients.filter(p=>p.id==fpidSup):S.patients;
   let supLines='';
@@ -1800,6 +1819,7 @@ function buildRepText(){
   if(acts.length){rep+=`📷 กิจกรรมวันนี้\n`;acts.forEach(a=>{const pn=a.pid?S.patients.find(x=>x.id==a.pid)?.name:'';rep+=`• ${a.text}${pn?' ('+pn+')':''}\n`;});rep+='\n';}
   rep+=`รายงานโดย: สวรรค์เนอร์สซิ่งโฮม นครสวรรค์ 🌸`;
   return rep;
+
 }
 function genRep(){document.getElementById('rpv').textContent=buildRepText();toast('สร้างรายงานเรียบร้อย ✅');}
 
@@ -1848,27 +1868,51 @@ async function exportAll(){
 }
 
 function showImgOverlay(dataUrl){
-  // Remove old overlay if any
   const old=document.getElementById('imgOv');if(old)old.remove();
   const ov=document.createElement('div');
   ov.id='imgOv';
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow-y:auto;padding:12px';
-  ov.innerHTML=`
-    <div style="width:100%;max-width:500px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div style="color:#fff;font-size:14px;font-weight:600">📷 รูปรายงาน</div>
-        <button onclick="document.getElementById('imgOv').remove()" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:13px">✕ ปิด</button>
-      </div>
-      <img src="${dataUrl}" style="width:100%;border-radius:10px;display:block;margin-bottom:10px">
-      <a href="${dataUrl}" download="รายงานสวรรค์NH.jpg" style="display:block;text-align:center;background:linear-gradient(135deg,#1A5CB8,#2A98C0);color:#fff;padding:12px;border-radius:11px;font-size:14px;font-weight:600;text-decoration:none;margin-bottom:8px">💾 บันทึกรูปลงเครื่อง</a>
-      <div style="background:rgba(255,255,255,.1);border-radius:9px;padding:10px;color:#fff;font-size:12px;line-height:1.6">
-        📋 คัดลอกข้อความแล้ว<br>
-        วิธีส่ง LINE:<br>
-        1. กด <strong>บันทึกรูปลงเครื่อง</strong> ด้านบน<br>
-        2. เปิด LINE → เลือกผู้รับ → แนบรูปจาก Gallery<br>
-        3. วางข้อความที่คัดลอกไว้
-      </div>
-    </div>`;
+
+  const wrapper=document.createElement('div');
+  wrapper.style.cssText='width:100%;max-width:500px';
+
+  // Header
+  const hdr=document.createElement('div');
+  hdr.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-bottom:10px';
+  hdr.innerHTML='<div style="color:#fff;font-size:14px;font-weight:600">📷 รูปรายงาน</div>';
+  const closeBtn=document.createElement('button');
+  closeBtn.textContent='✕ ปิด';
+  closeBtn.style.cssText='background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:13px';
+  closeBtn.onclick=()=>ov.remove();
+  hdr.appendChild(closeBtn);
+  wrapper.appendChild(hdr);
+
+  // Image
+  const img=document.createElement('img');
+  img.src=dataUrl;
+  img.style.cssText='width:100%;border-radius:10px;display:block;margin-bottom:10px';
+  wrapper.appendChild(img);
+
+  // Save button — use programmatic click on <a>
+  const saveBtn=document.createElement('button');
+  saveBtn.textContent='💾 บันทึกรูปลงเครื่อง';
+  saveBtn.style.cssText='width:100%;background:linear-gradient(135deg,#1A5CB8,#2A98C0);color:#fff;padding:13px;border-radius:11px;font-size:14px;font-weight:600;border:none;cursor:pointer;margin-bottom:8px;display:block';
+  saveBtn.onclick=function(){
+    const a=document.createElement('a');
+    a.href=dataUrl;
+    a.download='รายงานสวรรค์NH_'+curDate+'.jpg';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    toast('กำลังบันทึกรูป... ✅');
+  };
+  wrapper.appendChild(saveBtn);
+
+  // Instruction
+  const info=document.createElement('div');
+  info.style.cssText='background:rgba(255,255,255,.1);border-radius:9px;padding:10px;color:#fff;font-size:12px;line-height:1.7';
+  info.innerHTML='📋 คัดลอกข้อความแล้ว<br><strong>วิธีส่ง LINE:</strong><br>1. กด <strong>บันทึกรูปลงเครื่อง</strong> ด้านบน<br>2. เปิด LINE → เลือกผู้รับ → กดไอคอนรูปภาพ → เลือกรูปจาก Gallery<br>3. วางข้อความที่คัดลอกไว้ในช่องแชท';
+  wrapper.appendChild(info);
+
+  ov.appendChild(wrapper);
   document.body.appendChild(ov);
 }
 function rR(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();}
