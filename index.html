@@ -853,12 +853,25 @@ function adjPamp(pid,sh,d){const lg=eLog(pid,curDate,sh);lg.pampers=Math.max(0,(
 
 function getMedsForShift(p,sh){
   const sm=sh==='D'?MEDS_D:MEDS_N;
+  // day of week for the shift's date (0=Sun,1=Mon,...6=Sat)
+  const shDate=getShiftDate(sh);
+  const dow=new Date(shDate+'T00:00:00').getDay();
   return(p.medications||[]).filter(m=>!m.prn).map(med=>{
+    // if specificDays, check if today is one of the allowed days
+    if(med.specificDays&&med.days&&med.days.length){
+      if(!med.days.includes(dow))return null;
+    }
     const meals=med.meals.filter(m=>sm.includes(m));
     return meals.length?{...med,meals}:null;
   }).filter(Boolean);
 }
 function getPRNMeds(p){return(p.medications||[]).filter(m=>m.prn);}
+
+// Get day label for display
+function getDowLabel(dow){
+  const labels={0:'อา',1:'จ',2:'อ',3:'พ',4:'พฤ',5:'ศ',6:'ส'};
+  return labels[dow]||'';
+}
 function medKey(name,meal){return`${name}||${meal}`;}
 
 function countNoStool(pid){
@@ -994,7 +1007,7 @@ function saveP(){
   document.querySelectorAll('#fchips .chip.sel').forEach(c=>foods.push(c.dataset.f));
   document.querySelectorAll('#tdchips .chip.sel').forEach(c=>tasksD.push(c.dataset.td));
   document.querySelectorAll('#tnchips .chip.sel').forEach(c=>tasksN.push(c.dataset.tn));
-  const medications=tmpMeds.filter(m=>m.name.trim()).map(m=>({name:m.name.trim(),meals:m.meals,method:m.method||'eat',qty:m.qty||'',prn:m.prn||false}));
+  const medications=tmpMeds.filter(m=>m.name.trim()).map(m=>({name:m.name.trim(),meals:m.meals,method:m.method||'eat',qty:m.qty||'',prn:m.prn||false,specificDays:m.specificDays||false,days:m.days||[],eyeSide:m.eyeSide||null}));
   const appointments=tmpAppts.filter(a=>a.date).map(a=>({date:a.date,doctor:a.doctor||''}));
   const dob=document.getElementById('pDob').value;
   const emergHosp=document.getElementById('pEmergHosp').value.trim();
@@ -1023,6 +1036,16 @@ function addMedEntry(m){
   renderMedEntries();
 }
 function removeMedEntry(id){tmpMeds=tmpMeds.filter(m=>m.id!==id);renderMedEntries();}
+const WEEK_DAYS=[
+  {k:1,l:'จ'},  // Monday
+  {k:2,l:'อ'},  // Tuesday
+  {k:3,l:'พ'},  // Wednesday
+  {k:4,l:'พฤ'}, // Thursday
+  {k:5,l:'ศ'},  // Friday
+  {k:6,l:'ส'},  // Saturday
+  {k:0,l:'อา'}, // Sunday
+];
+
 function renderMedEntries(){
   const el=document.getElementById('medEntries');
   if(!tmpMeds.length){el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:6px 0">ยังไม่มียา — กด ➕ เพิ่มยา</div>';return;}
@@ -1034,17 +1057,35 @@ function renderMedEntries(){
     <div class="qty-row">
       <span class="qty-lbl">จำนวน</span>
       <input class="qty-inp" type="text" placeholder="เช่น 1 เม็ด" value="${med.qty||''}" oninput="setMedQty('${med.id}',this.value,'tmp')">
-      <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;margin-left:8px">
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
         <input type="checkbox" ${med.prn?'checked':''} onchange="setMedPrn('${med.id}',this.checked,'tmp')">
         <span style="color:var(--gold);font-weight:600">PRN (ตามอาการ)</span>
       </label>
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
+        <input type="checkbox" ${med.specificDays?'checked':''} onchange="setMedSpecificDays('${med.id}',this.checked,'tmp')">
+        <span style="color:var(--purple);font-weight:600">เฉพาะบางวัน</span>
+      </label>
     </div>
-    ${med.prn?'':'<div class="med-sub" style="margin-top:7px">มื้อที่ให้</div><div class="meal-chips">'+MEAL_TIMES.map(m=>`<span class="meal-chip ${med.meals.includes(m)?'mc':''}" onclick="toggleMedMeal('${med.id}','${m}','tmp')">${m}</span>`).join('')+'</div>'}
+    ${med.specificDays?`<div class="med-sub" style="color:var(--purple);margin-top:6px">เลือกวันที่ให้ยา</div>
+    <div style="display:flex;gap:5px;margin-bottom:6px">
+      ${WEEK_DAYS.map(d=>`<button style="width:34px;height:34px;border-radius:50%;border:2px solid ${(med.days||[]).includes(d.k)?'var(--purple)':'var(--border)'};background:${(med.days||[]).includes(d.k)?'var(--purple)':'#fff'};color:${(med.days||[]).includes(d.k)?'#fff':'var(--muted)'};font-size:12px;font-weight:600;cursor:pointer" onclick="toggleMedDay('${med.id}',${d.k},'tmp')">${d.l}</button>`).join('')}
+    </div>`:''
+    }
+    ${(med.prn||med.specificDays)?'':'<div class="med-sub" style="margin-top:7px">มื้อที่ให้</div><div class="meal-chips">'+MEAL_TIMES.map(m=>`<span class="meal-chip ${med.meals.includes(m)?'mc':''}" onclick="toggleMedMeal('${med.id}','${m}','tmp')">${m}</span>`).join('')+'</div>'}
+    ${med.specificDays&&!med.prn?'<div class="med-sub">มื้อที่ให้</div><div class="meal-chips">'+MEAL_TIMES.map(m=>`<span class="meal-chip ${med.meals.includes(m)?'mc':''}" onclick="toggleMedMeal('${med.id}','${m}','tmp')">${m}</span>`).join('')+'</div>':''}
     <div class="med-sub">วิธีให้</div>
     <div class="method-chips">${MED_METHODS.map(mt=>`<span class="method-chip ${med.method===mt.k?'mc':''}" onclick="setMedMethod('${med.id}','${mt.k}','tmp')">${mt.l}</span>`).join('')}</div>
+    ${med.method==='drop'?`<div class="med-sub" style="color:var(--sky);margin-top:6px">👁️ ข้างที่หยอด</div>
+    <div style="display:flex;gap:6px;margin-bottom:4px">
+      ${['ตาซ้าย','ตาขวา','ทั้งสองข้าง'].map(s=>`<button style="padding:5px 12px;border-radius:20px;font-size:12px;border:1.5px solid ${med.eyeSide===s?'var(--sky)':'var(--border)'};background:${med.eyeSide===s?'var(--sky-l)':'#fff'};color:${med.eyeSide===s?'var(--sky)':'var(--muted)'};cursor:pointer;font-weight:${med.eyeSide===s?'600':'400'}" onclick="setMedEyeSide('${med.id}','${s}','tmp')">${s}</button>`).join('')}
+    </div>`:''}
   </div>`).join('');
 }
-function setMedPrn(id,val,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m){m.prn=val;if(val)m.meals=[];}src==='tmp'?renderMedEntries():renderReMedEntries();}
+function setMedEyeSide(id,val,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m){m.eyeSide=m.eyeSide===val?null:val;}src==='tmp'?renderMedEntries():renderReMedEntries();}{const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m){m.prn=val;if(val){m.meals=[];m.specificDays=false;}}src==='tmp'?renderMedEntries():renderReMedEntries();}
+function setMedSpecificDays(id,val,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m){m.specificDays=val;if(!val)m.days=[];if(val)m.prn=false;}src==='tmp'?renderMedEntries():renderReMedEntries();}
+function toggleMedDay(id,day,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(!m)return;if(!m.days)m.days=[];m.days=m.days.includes(day)?m.days.filter(d=>d!==day):[...m.days,day];src==='tmp'?renderMedEntries():renderReMedEntries();}
 function setMedName(id,val,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m)m.name=val;}
 function setMedQty(id,val,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m)m.qty=val;}
 function toggleMedMeal(id,meal,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(!m)return;m.meals=m.meals.includes(meal)?m.meals.filter(x=>x!==meal):[...m.meals,meal];src==='tmp'?renderMedEntries():renderReMedEntries();}
@@ -1078,10 +1119,28 @@ function renderReMedEntries(){
       <span class="qty-lbl">จำนวน</span>
       <input class="qty-inp" type="text" placeholder="เช่น 1 เม็ด" value="${med.qty||''}" oninput="setMedQty('${med.id}',this.value,'re')">
     </div>
-    <div class="med-sub" style="margin-top:7px">มื้อที่ให้</div>
-    <div class="meal-chips">${MEAL_TIMES.map(m=>`<span class="meal-chip ${med.meals.includes(m)?'mc':''}" onclick="toggleMedMeal('${med.id}','${m}','re')">${m}</span>`).join('')}</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
+        <input type="checkbox" ${med.prn?'checked':''} onchange="setMedPrn('${med.id}',this.checked,'re')">
+        <span style="color:var(--gold);font-weight:600">PRN (ตามอาการ)</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
+        <input type="checkbox" ${med.specificDays?'checked':''} onchange="setMedSpecificDays('${med.id}',this.checked,'re')">
+        <span style="color:var(--purple);font-weight:600">เฉพาะบางวัน</span>
+      </label>
+    </div>
+    ${med.specificDays?`<div class="med-sub" style="color:var(--purple);margin-top:6px">เลือกวันที่ให้ยา</div>
+    <div style="display:flex;gap:5px;margin-bottom:6px">
+      ${WEEK_DAYS.map(d=>`<button style="width:34px;height:34px;border-radius:50%;border:2px solid ${(med.days||[]).includes(d.k)?'var(--purple)':'var(--border)'};background:${(med.days||[]).includes(d.k)?'var(--purple)':'#fff'};color:${(med.days||[]).includes(d.k)?'#fff':'var(--muted)'};font-size:12px;font-weight:600;cursor:pointer" onclick="toggleMedDay('${med.id}',${d.k},'re')">${d.l}</button>`).join('')}
+    </div>`:''}
+    ${(med.prn||med.specificDays)?'':'<div class="med-sub" style="margin-top:7px">มื้อที่ให้</div><div class="meal-chips">'+MEAL_TIMES.map(m=>`<span class="meal-chip ${med.meals.includes(m)?'mc':''}" onclick="toggleMedMeal('${med.id}','${m}','re')">${m}</span>`).join('')+'</div>'}
+    ${med.specificDays&&!med.prn?'<div class="med-sub">มื้อที่ให้</div><div class="meal-chips">'+MEAL_TIMES.map(m=>`<span class="meal-chip ${med.meals.includes(m)?'mc':''}" onclick="toggleMedMeal('${med.id}','${m}','re')">${m}</span>`).join('')+'</div>':''}
     <div class="med-sub">วิธีให้</div>
     <div class="method-chips">${MED_METHODS.map(mt=>`<span class="method-chip ${med.method===mt.k?'mc':''}" onclick="setMedMethod('${med.id}','${mt.k}','re')">${mt.l}</span>`).join('')}</div>
+    ${med.method==='drop'?`<div class="med-sub" style="color:var(--sky);margin-top:6px">👁️ ข้างที่หยอด</div>
+    <div style="display:flex;gap:6px;margin-bottom:4px">
+      ${['ตาซ้าย','ตาขวา','ทั้งสองข้าง'].map(s=>`<button style="padding:5px 12px;border-radius:20px;font-size:12px;border:1.5px solid ${med.eyeSide===s?'var(--sky)':'var(--border)'};background:${med.eyeSide===s?'var(--sky-l)':'#fff'};color:${med.eyeSide===s?'var(--sky)':'var(--muted)'};cursor:pointer;font-weight:${med.eyeSide===s?'600':'400'}" onclick="setMedEyeSide('${med.id}','${s}','re')">${s}</button>`).join('')}
+    </div>`:''}
   </div>`).join('');
 }
 function removeReMedEntry(id){reMedTmp=reMedTmp.filter(m=>m.id!==id);renderReMedEntries();}
@@ -1090,7 +1149,7 @@ function saveReMed(){
   const date=document.getElementById('reMedDate').value||tday();
   const doc=document.getElementById('reMedDoc').value.trim();
   const appt=document.getElementById('reMedAppt').value;
-  const newMeds=reMedTmp.filter(m=>m.name.trim()).map(m=>({name:m.name.trim(),meals:m.meals,method:m.method||'eat',qty:m.qty||''}));
+  const newMeds=reMedTmp.filter(m=>m.name.trim()).map(m=>({name:m.name.trim(),meals:m.meals,method:m.method||'eat',qty:m.qty||'',prn:m.prn||false,specificDays:m.specificDays||false,days:m.days||[],eyeSide:m.eyeSide||null}));
   // save to history
   if(!p.medHistory)p.medHistory=[];
   p.medHistory.unshift({date,doctor:doc,meds:newMeds});
@@ -1269,8 +1328,10 @@ function rShift(p,sh,lg){
         // single key per med+meal
         const key=medKey(med.name,meal);const done=lg.meds?.[key]||false;
         const mt=MED_METHODS.find(m=>m.k===med.method)||MED_METHODS[0];
+        const dayBadge=med.specificDays&&med.days?.length?`<span style="font-size:10px;background:var(--purple-l);color:var(--purple);padding:1px 6px;border-radius:10px;margin-left:3px">${med.days.map(d=>getDowLabel(d)).join(' ')}</span>`:'';
+        const eyeBadge=med.method==='drop'&&med.eyeSide?`<span style="font-size:10px;background:var(--sky-l);color:var(--sky);padding:1px 6px;border-radius:10px;margin-left:3px">👁️ ${med.eyeSide}</span>`:'';
         h+=`<div class="ci"><div class="ck ${done?'on':''}" onclick="tMedKey(${p.id},'${sh}','${key.replace(/'/g,"\\'")}')"></div>
-          <div class="cl ${done?'done':''}">💊 ${med.name}${med.qty?' <strong style=\'color:var(--sky)\'>(${med.qty})</strong>':''}</div>
+          <div class="cl ${done?'done':''}">💊 ${med.name}${med.qty?` <strong style="color:var(--sky)">(${med.qty})</strong>`:''}${dayBadge}${eyeBadge}</div>
           <span class="med-badge ${mt.cls}">${mt.l}</span></div>`;
       });
     });
@@ -1290,33 +1351,49 @@ function rShift(p,sh,lg){
 
   // FOOD
   h+=`<div class="dvr"></div><div class="sl">🍽️ มื้ออาหาร</div>`;
-  const meals=sh==='D'?[{k:'breakfast',l:'🌅 อาหารเช้า'},{k:'lunch',l:'☀️ อาหารเที่ยง'}]:[{k:'dinner',l:'🌙 อาหารเย็น'}];
   const isFeed=(p.foods||[]).some(f=>f.includes('Feed')||f.includes('สาย'));
-  meals.forEach(meal=>{
-    const fd=lg.food?.[meal.k]||{};const fo=(p.foods&&p.foods.length)?p.foods:['อาหารปกติ'];
-    h+=`<div class="fbox"><div style="font-size:12px;font-weight:600;margin-bottom:4px">${meal.l}</div>`;
-    if(isFeed){
-      // tube feed
-      h+=`<div class="food-row">
-        <button class="food-btn ${fd.feedDone===true?'fsel':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','feedDone',${!(fd.feedDone===true)})">✅ ให้ครบ</button>
-        <button class="food-btn ${fd.feedDone===false?'fsel2':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','feedDone',${!(fd.feedDone===false)?false:null})">❌ ไม่ครบ</button>
-      </div>
-      ${fd.feedDone===false?`<input class="finp" placeholder="เหตุผล/หมายเหตุ" value="${fd.feedNote||''}" onchange="sFoodD(${p.id},'${sh}','${meal.k}','feedNote',this.value)" style="margin-top:4px;width:100%">`:''}`;
-    } else {
-      h+=`<div class="opts">${fo.map(ft=>`<button class="opt oo ${fd.type===ft?'sel':''}" onclick="sFoodT(${p.id},'${sh}','${meal.k}','${ft.replace(/\'/g,"\\'")}')">${ft}</button>`).join('')}</div>
-      <div class="food-row">
-        <button class="food-btn ${fd.amount==='หมดถาด'?'fsel':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','amount','หมดถาด')">🍽️ หมดถาด</button>
-        <button class="food-btn ${fd.amount==='ครึ่งถาด'?'fsel2':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','amount','ครึ่งถาด')">🥄 ครึ่งถาด</button>
-        <button class="food-btn ${fd.amount==='น้อยกว่าครึ่ง'?'fsel2':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','amount','น้อยกว่าครึ่ง')">⬇️ น้อยกว่าครึ่ง</button>
-      </div>
-      <div class="food-row">
-        <button class="food-btn ${fd.selfFeed===true?'fsel':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','selfFeed',${!(fd.selfFeed===true)})">🙋 ทานเอง</button>
-        <button class="food-btn ${fd.selfFeed===false?'fsel2':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','selfFeed',${fd.selfFeed===false?null:false})">👨‍⚕️ เจ้าหน้าที่ป้อน</button>
-      </div>
-      <div class="frow"><input class="finp" placeholder="รายละเอียดเพิ่มเติม" value="${fd.detail||''}" onchange="sFoodD(${p.id},'${sh}','${meal.k}','detail',this.value)"></div>`;
-    }
-    h+=`</div>`;
-  });
+
+  if(isFeed){
+    // Feed meals: 4 times per day split across shifts
+    // D shift = 08:00, 12:00 | N shift = 16:00, 20:00
+    const feedMeals=sh==='D'
+      ?[{k:'feed08',l:'🕗 08:00'},{k:'feed12',l:'🕛 12:00'}]
+      :[{k:'feed16',l:'🕓 16:00'},{k:'feed20',l:'🕗 20:00'}];
+    feedMeals.forEach(meal=>{
+      const fd=lg.food?.[meal.k]||{};
+      h+=`<div class="fbox">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div style="font-size:13px;font-weight:600">🔴 Feed ${meal.l}</div>
+          <input class="finp" placeholder="สูตรอาหาร เช่น Ensure Plus" value="${fd.formula||''}" 
+            onchange="sFoodD(${p.id},'${sh}','${meal.k}','formula',this.value)" 
+            style="max-width:160px;font-size:12px;border:1.5px solid var(--border);border-radius:7px;padding:4px 8px;background:#fff">
+        </div>
+        <div class="food-row">
+          <button class="food-btn ${fd.feedDone===true?'fsel':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','feedDone',${fd.feedDone===true?null:true})">✅ ให้ครบ</button>
+          <button class="food-btn ${fd.feedDone===false?'fsel2':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','feedDone',${fd.feedDone===false?null:false})">❌ ไม่ครบ</button>
+        </div>
+        ${fd.feedDone===false?`<input class="finp" placeholder="เหตุผล เช่น อาเจียน/ไม่ยอมรับ" value="${fd.feedNote||''}" onchange="sFoodD(${p.id},'${sh}','${meal.k}','feedNote',this.value)" style="margin-top:5px;width:100%">`:''}
+      </div>`;
+    });
+  } else {
+    const meals=sh==='D'?[{k:'breakfast',l:'🌅 อาหารเช้า'},{k:'lunch',l:'☀️ อาหารเที่ยง'}]:[{k:'dinner',l:'🌙 อาหารเย็น'}];
+    meals.forEach(meal=>{
+      const fd=lg.food?.[meal.k]||{};const fo=(p.foods&&p.foods.length)?p.foods:['อาหารปกติ'];
+      h+=`<div class="fbox"><div style="font-size:12px;font-weight:600;margin-bottom:4px">${meal.l}</div>
+        <div class="opts">${fo.map(ft=>`<button class="opt oo ${fd.type===ft?'sel':''}" onclick="sFoodT(${p.id},'${sh}','${meal.k}','${ft.replace(/\'/g,"\\'")}')">${ft}</button>`).join('')}</div>
+        <div class="food-row">
+          <button class="food-btn ${fd.amount==='หมดถาด'?'fsel':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','amount','หมดถาด')">🍽️ หมดถาด</button>
+          <button class="food-btn ${fd.amount==='ครึ่งถาด'?'fsel2':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','amount','ครึ่งถาด')">🥄 ครึ่งถาด</button>
+          <button class="food-btn ${fd.amount==='น้อยกว่าครึ่ง'?'fsel2':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','amount','น้อยกว่าครึ่ง')">⬇️ น้อยกว่าครึ่ง</button>
+        </div>
+        <div class="food-row">
+          <button class="food-btn ${fd.selfFeed===true?'fsel':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','selfFeed',${fd.selfFeed===true?null:true})">🙋 ทานเอง</button>
+          <button class="food-btn ${fd.selfFeed===false?'fsel2':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','selfFeed',${fd.selfFeed===false?null:false})">👨‍⚕️ เจ้าหน้าที่ป้อน</button>
+        </div>
+        <div class="frow"><input class="finp" placeholder="รายละเอียดเพิ่มเติม" value="${fd.detail||''}" onchange="sFoodD(${p.id},'${sh}','${meal.k}','detail',this.value)"></div>
+      </div>`;
+    });
+  }
 
   // STOOL
   const stool=lg.stool||{did:null};const nsd=countNoStool(p.id);
@@ -1899,22 +1976,29 @@ function buildRepText(){
         else if(doneMed>0)rep+=`💊 ยา: ให้ยาแล้ว ${doneMed}/${totalMed} มื้อ\n`;
         else rep+=`💊 ยา: ยังไม่ได้ให้ยา ⬜\n`;
       }
-      const mealsList=sh==='D'?[{k:'breakfast',l:'เช้า'},{k:'lunch',l:'เที่ยง'}]:[{k:'dinner',l:'เย็น'}];
-      mealsList.forEach(ml=>{
-        const fd=lg.food?.[ml.k]||{};
-        const isFeed=(p.foods||[]).some(f=>f.includes('Feed')||f.includes('สาย'));
-        if(isFeed){
-          if(fd.feedDone===true)rep+=`🍽️ อาหาร${ml.l}: อาหารทางสาย ✅ ให้ครบ\n`;
-          else if(fd.feedDone===false)rep+=`🍽️ อาหาร${ml.l}: อาหารทางสาย ❌ ไม่ครบ${fd.feedNote?' ('+fd.feedNote+')':''}\n`;
-        } else if(fd.type||fd.amount){
-          let foodLine=`🍽️ อาหาร${ml.l}: ${fd.type||''}`;
-          if(fd.amount)foodLine+=` ${fd.amount}`;
-          if(fd.selfFeed===true)foodLine+=' (ทานเอง)';
-          else if(fd.selfFeed===false)foodLine+=' (เจ้าหน้าที่ป้อน)';
-          if(fd.detail)foodLine+=' '+fd.detail;
-          rep+=foodLine+'\n';
-        }
-      });
+      const isFeed=(p.foods||[]).some(f=>f.includes('Feed')||f.includes('สาย'));
+      if(isFeed){
+        const feedMeals=sh==='D'?[{k:'feed08',l:'08:00'},{k:'feed12',l:'12:00'}]:[{k:'feed16',l:'16:00'},{k:'feed20',l:'20:00'}];
+        feedMeals.forEach(ml=>{
+          const fd=lg.food?.[ml.k]||{};
+          const formula=fd.formula?` (${fd.formula})`:'';
+          if(fd.feedDone===true)rep+=`🔴 Feed ${ml.l}${formula}: ✅ ให้ครบ\n`;
+          else if(fd.feedDone===false)rep+=`🔴 Feed ${ml.l}${formula}: ❌ ไม่ครบ${fd.feedNote?' — '+fd.feedNote:''}\n`;
+        });
+      } else {
+        const mealsList=sh==='D'?[{k:'breakfast',l:'เช้า'},{k:'lunch',l:'เที่ยง'}]:[{k:'dinner',l:'เย็น'}];
+        mealsList.forEach(ml=>{
+          const fd=lg.food?.[ml.k]||{};
+          if(fd.type||fd.amount){
+            let foodLine=`🍽️ อาหาร${ml.l}: ${fd.type||''}`;
+            if(fd.amount)foodLine+=` ${fd.amount}`;
+            if(fd.selfFeed===true)foodLine+=' (ทานเอง)';
+            else if(fd.selfFeed===false)foodLine+=' (เจ้าหน้าที่ป้อน)';
+            if(fd.detail)foodLine+=' '+fd.detail;
+            rep+=foodLine+'\n';
+          }
+        });
+      }
       // wounds
       if((lg.wounds||[]).length)rep+=`🩹 แผล: ${lg.wounds.join(', ')}${lg.woundNote?' — '+lg.woundNote:''}\n`;
       const st=stoolTxt(lg.stool);rep+=`อุจจาระ: ${st||'ยังไม่บันทึก'}\n`;
