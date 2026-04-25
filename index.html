@@ -587,36 +587,8 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);min
       <span class="chip" data-f="อาหารทางสาย (Feed)">🔴 อาหารทางสาย</span>
     </div>
   </div>
-  <div class="subh subD">☀️ งานเวร D ที่ต้องทำ</div>
-  <div class="chips" id="tdchips">
-    <span class="chip" data-td="วัดสัญญาณชีพรอบ 10.00น.">🩺 วัดสัญญาณชีพ</span>
-    <span class="chip" data-td="ให้อาหารเช้า">🌅 อาหารเช้า</span>
-    <span class="chip" data-td="บริหารลิ้นหลังอาหารเช้า">🗣️ บริหารลิ้น</span>
-    <span class="chip" data-td="ออกกำลังกาย/กายภาพห้องกายภาพ">🏃 กายภาพห้อง</span>
-    <span class="chip" data-td="ให้อาหารเที่ยง">☀️ อาหารเที่ยง</span>
-    <span class="chip" data-td="ออกกำลังกายท่านั่ง 40 นาที">🪑 นั่งออกกำลัง</span>
-    <span class="chip" data-td="อาบน้ำ/เช็ดตัวรอบบ่าย">🛁 อาบน้ำบ่าย</span>
-    <span class="chip" data-td="เช็ดหัวเตียง">🛏️ เช็ดหัวเตียง</span>
-    <span class="chip" data-td="เติมน้ำในเหยือก">🚰 เติมน้ำ</span>
-    <span class="chip" data-td="พลิกตะแคงตัว">🔄 พลิกตัว</span>
-    <span class="chip" data-td="พ่นยา">💨 พ่นยา</span>
-    <span class="chip" data-td="หยอดตา">👁️ หยอดตา</span>
-    <span class="chip" data-td="สวนปัสสาวะ">💧 สวนปัสสาวะ</span>
-    <span class="chip" data-td="ทาครีมป้องกันแผล">🧴 ทาครีม</span>
-    <span class="chip" data-td="กายภาพในห้อง (พิเศษ)">🏃 กายภาพในห้อง</span>
-  </div>
-  <div class="subh subN2">🌙 งานเวร N ที่ต้องทำ</div>
-  <div class="chips" id="tnchips">
-    <span class="chip" data-tn="ให้อาหารเย็น">🌙 อาหารเย็น</span>
-    <span class="chip" data-tn="แปรงฟัน/Mouth Care ก่อนนอน">🦷 แปรงฟัน/Mouth Care</span>
-    <span class="chip" data-tn="อาบน้ำ/เช็ดตัวรอบเช้า">🛁 อาบน้ำเช้า</span>
-    <span class="chip" data-tn="เช็ดหัวเตียง">🛏️ เช็ดหัวเตียง</span>
-    <span class="chip" data-tn="เติมน้ำในเหยือก">🚰 เติมน้ำ</span>
-    <span class="chip" data-tn="พลิกตะแคงตัว">🔄 พลิกตัว</span>
-    <span class="chip" data-tn="พ่นยา">💨 พ่นยา</span>
-    <span class="chip" data-tn="หยอดตา">👁️ หยอดตา</span>
-    <span class="chip" data-tn="สวนปัสสาวะ">💧 สวนปัสสาวะ</span>
-    <span class="chip" data-tn="ทาครีมป้องกันแผล">🧴 ทาครีม</span>
+  <div style="background:var(--sky-l);border-radius:9px;padding:9px 12px;font-size:12px;color:var(--sky);margin:8px 0">
+    ✅ งานบริบาลมาตรฐานจะขึ้นให้ติ๊กอัตโนมัติทุกเวร ไม่ต้องเลือกเอง
   </div>
   <div class="subh" style="color:var(--green);margin-top:12px">💊 รายการยา</div>
   <div style="font-size:11px;color:var(--muted);margin-bottom:8px">ตั้งค่าครั้งแรก — ระบบสร้างรายการยาให้ทุกวันอัตโนมัติ</div>
@@ -723,6 +695,30 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);min
 const DK='sawanNH10';
 const PIN_KEY='sawanNH_pin';
 let pinInput='',pinCallback=null,pinUnlocked=false,pinTimer=null;
+
+// รายการงานมาตรฐานทุกคน — ไม่ต้องเลือกเอง
+const DEFAULT_TASKS_D=[
+  'วัดสัญญาณชีพรอบ 10.00น.',
+  'อาหารเช้า',
+  'บริหารลิ้นหลังอาหารเช้า',
+  'อาหารกลางวัน',
+  'ออกกำลังกายท่านั่ง 40 นาที',
+  'อาบน้ำ/เช็ดตัวรอบบ่าย',
+  'เช็ดหัวเตียง',
+  'เติมน้ำในเหยือก',
+  'พลิกตะแคงตัว',
+  'ทำความสะอาดช่องปาก',
+  'ทาครีมป้องกันแผล',
+];
+const DEFAULT_TASKS_N=[
+  'อาหารเย็น',
+  'แปรงฟัน/Mouth Care ก่อนนอน',
+  'อาบน้ำ/เช็ดตัวรอบเช้า',
+  'เช็ดหัวเตียง',
+  'เติมน้ำในเหยือก',
+  'พลิกตะแคงตัว',
+  'ทาครีมป้องกันแผล',
+];
 const MEAL_TIMES=['ก่อนอาหารเช้า','หลังอาหารเช้า','ก่อนอาหารเที่ยง','หลังอาหารเที่ยง','ก่อนอาหารเย็น','หลังอาหารเย็น','ก่อนนอน'];
 const MEDS_D=['หลังอาหารเช้า','ก่อนอาหารเที่ยง','หลังอาหารเที่ยง','ก่อนอาหารเย็น'];
 const MEDS_N=['ก่อนอาหารเช้า','หลังอาหารเย็น','ก่อนนอน'];
@@ -1123,8 +1119,6 @@ function _oEditP(pid){
   document.getElementById('pEmergHosp').value=p.emergHosp||'';
   document.querySelectorAll('#moP .chip').forEach(c=>c.classList.remove('sel'));
   (p.foods||[]).forEach(f=>document.querySelector(`#fchips [data-f="${f}"]`)?.classList.add('sel'));
-  (p.tasksD||[]).forEach(t=>document.querySelector(`#tdchips [data-td="${t}"]`)?.classList.add('sel'));
-  (p.tasksN||[]).forEach(t=>document.querySelector(`#tnchips [data-tn="${t}"]`)?.classList.add('sel'));
   tmpMeds=(p.medications||[]).map(m=>({...m,id:'m'+Date.now()+Math.random().toString(36).slice(2,5)}));
   tmpAppts=(p.appointments||[]).map(a=>({...a,id:'a'+Date.now()+Math.random().toString(36).slice(2,5)}));
   // backward compat: if old single appointment exists
@@ -1134,10 +1128,11 @@ function _oEditP(pid){
 }
 function saveP(){
   const name=document.getElementById('pnam').value.trim();if(!name){toast('กรุณาใส่ชื่อ');return;}
-  const foods=[],tasksD=[],tasksN=[];
+  const foods=[];
   document.querySelectorAll('#fchips .chip.sel').forEach(c=>foods.push(c.dataset.f));
-  document.querySelectorAll('#tdchips .chip.sel').forEach(c=>tasksD.push(c.dataset.td));
-  document.querySelectorAll('#tnchips .chip.sel').forEach(c=>tasksN.push(c.dataset.tn));
+  // ใช้รายการมาตรฐานเสมอ ไม่ต้องเลือก
+  const tasksD=[...DEFAULT_TASKS_D];
+  const tasksN=[...DEFAULT_TASKS_N];
   const medications=tmpMeds.filter(m=>m.name.trim()).map(m=>({name:m.name.trim(),meals:m.meals,method:m.method||'eat',qty:m.qty||'',prn:m.prn||false,specificDays:m.specificDays||false,days:m.days||[],eyeSide:m.eyeSide||null}));
   const appointments=tmpAppts.filter(a=>a.date).map(a=>({date:a.date,doctor:a.doctor||''}));
   const dob=document.getElementById('pDob').value;
@@ -1316,7 +1311,7 @@ function rPats(){
   list.innerHTML=S.patients.map(p=>{
     const sh=aSh[p.id]||'D';const lg=gLog(p.id,curDate,sh);const isOpen=oC[p.id];
     const ini=p.name.replace(/คุณ|นาย|นาง|นางสาว/g,'').trim().charAt(0)||'?';
-    const tasks=sh==='D'?(p.tasksD||[]):(p.tasksN||[]);
+    const tasks=sh==='D'?(p.tasksD?.length?p.tasksD:DEFAULT_TASKS_D):(p.tasksN?.length?p.tasksN:DEFAULT_TASKS_N);
     const shMeds=getMedsForShift(p,sh);
     const tDone=tasks.filter(t=>lg.tasks?.[t]).length;
     const mDone=shMeds.reduce((a,med)=>a+med.meals.filter(meal=>lg.meds?.[medKey(med.name,meal)]).length,0);
@@ -1436,7 +1431,7 @@ function rShift(p,sh,lg){
   }
 
   // TASKS
-  const tasks=sh==='D'?(p.tasksD||[]):(p.tasksN||[]);
+  const tasks=sh==='D'?(p.tasksD?.length?p.tasksD:DEFAULT_TASKS_D):(p.tasksN?.length?p.tasksN:DEFAULT_TASKS_N);
   if(tasks.length){h+=`<div class="dvr"></div><div class="sl">รายการดูแล</div>`;tasks.forEach(t=>{const done=lg.tasks?.[t]||false;h+=`<div class="ci"><div class="ck ${done?'on':''}" onclick="tTask(${p.id},'${sh}','${t.replace(/'/g,"\\'")}')"></div><div class="cl ${done?'done':''}">${t}</div></div>`;});}
 
   // BATH
@@ -1451,26 +1446,32 @@ function rShift(p,sh,lg){
   h+=`<div class="dvr"></div><div class="sl">👶 แพมเพิส (เวร ${sh})</div>
   <div class="pamp-row"><div class="pamp-lbl">จำนวนที่ใช้</div><div class="pc"><button class="pb" onclick="adjPamp(${p.id},'${sh}',-1)">−</button><div class="pnum">${lg.pampers||0}</div><button class="pb" onclick="adjPamp(${p.id},'${sh}',1)">+</button></div><span style="font-size:12px;color:var(--purple)">ตัว</span></div>`;
 
-  // MEDS — single checkbox per med, grouped by meal
+  // MEDS — ยาทั้งหมดของเวรนี้ แสดงจำนวนเม็ด ติ๊กช่องเดียวต่อ 1 ตัว
   const shMeds=getMedsForShift(p,sh);
   const prnMeds=getPRNMeds(p);
   if(shMeds.length){
-    h+=`<div class="dvr"></div><div class="sl">💊 ยา</div>`;
-    const mealOrder=sh==='D'?MEDS_D:MEDS_N;
-    mealOrder.forEach(meal=>{
-      const medsForMeal=shMeds.filter(med=>med.meals.includes(meal));
-      if(!medsForMeal.length)return;
-      h+=`<div style="font-size:11px;font-weight:600;color:var(--sky);margin:6px 0 3px">🕐 ${meal}</div>`;
-      medsForMeal.forEach(med=>{
-        // single key per med+meal
-        const key=medKey(med.name,meal);const done=lg.meds?.[key]||false;
-        const mt=MED_METHODS.find(m=>m.k===med.method)||MED_METHODS[0];
-        const dayBadge=med.specificDays&&med.days?.length?`<span style="font-size:10px;background:var(--purple-l);color:var(--purple);padding:1px 6px;border-radius:10px;margin-left:3px">${med.days.map(d=>getDowLabel(d)).join(' ')}</span>`:'';
-        const eyeBadge=med.method==='drop'&&med.eyeSide?`<span style="font-size:10px;background:var(--sky-l);color:var(--sky);padding:1px 6px;border-radius:10px;margin-left:3px">👁️ ${med.eyeSide}</span>`:'';
-        h+=`<div class="ci"><div class="ck ${done?'on':''}" onclick="tMedKey(${p.id},'${sh}','${key.replace(/'/g,"\\'")}')"></div>
-          <div class="cl ${done?'done':''}">💊 ${med.name}${med.qty?` <strong style="color:var(--sky)">(${med.qty})</strong>`:''}${dayBadge}${eyeBadge}</div>
-          <span class="med-badge ${mt.cls}">${mt.l}</span></div>`;
-      });
+    h+=`<div class="dvr"></div><div class="sl">💊 ยา — ตรวจนับและแจกยา</div>
+    <div style="background:var(--sky-l);border-radius:8px;padding:5px 10px;font-size:11px;color:var(--sky);margin-bottom:6px">พยาบาลจัดยาตามรายการ → บริบาลตรวจนับแล้วติ๊กว่าแจกครบ</div>`;
+    shMeds.forEach(med=>{
+      const key='sh_med||'+med.name;
+      const done=lg.meds?.[key]||false;
+      const mt=MED_METHODS.find(m=>m.k===med.method)||MED_METHODS[0];
+      const dayBadge=med.specificDays&&med.days?.length?`<span style="font-size:10px;background:var(--purple-l);color:var(--purple);padding:1px 6px;border-radius:10px;margin-left:3px">${med.days.map(d=>getDowLabel(d)).join(' ')}</span>`:'';
+      const eyeBadge=med.method==='drop'&&med.eyeSide?`<span style="font-size:10px;background:var(--sky-l);color:var(--sky);padding:1px 6px;border-radius:10px;margin-left:3px">👁️ ${med.eyeSide}</span>`:'';
+      h+=`<div class="ci" style="padding:8px 0;align-items:flex-start">
+        <div class="ck ${done?'on':''}" onclick="tMedKey(${p.id},'${sh}','${key.replace(/'/g,"\\'")}')"></div>
+        <div style="flex:1">
+          <div class="cl ${done?'done':''}"><strong>${med.name}</strong>${dayBadge}${eyeBadge}</div>
+          <div style="font-size:12px;margin-top:3px">
+            ${med.qty?`<span style="background:var(--sky);color:#fff;font-weight:700;padding:2px 9px;border-radius:8px;margin-right:5px">${med.qty}</span>`:''}
+            <span style="color:var(--muted)">${med.meals.join(' • ')}</span>
+            <span class="med-badge ${mt.cls}" style="margin-left:4px">${mt.l}</span>
+          </div>
+        </div>
+        <span style="font-size:11px;font-weight:700;color:${done?'var(--green)':'var(--muted)'}">
+          ${done?'✅':'⬜'}
+        </span>
+      </div>`;
     });
   }
   // PRN meds
@@ -1479,9 +1480,13 @@ function rShift(p,sh,lg){
     prnMeds.forEach(med=>{
       const key='prn||'+med.name;const done=lg.meds?.[key]||false;
       const mt=MED_METHODS.find(m=>m.k===med.method)||MED_METHODS[0];
-      h+=`<div class="ci"><div class="ck ${done?'on':''}" onclick="tMedKey(${p.id},'${sh}','${key.replace(/'/g,"\\'")}')"></div>
-        <div class="cl ${done?'done':''}">💊 ${med.name}${med.qty?' ('+med.qty+')':''}</div>
-        <span class="med-badge ${mt.cls}">${mt.l}</span></div>`;
+      h+=`<div class="ci">
+        <div class="ck ${done?'on':''}" onclick="tMedKey(${p.id},'${sh}','${key.replace(/'/g,"\\'")}')"></div>
+        <div style="flex:1">
+          <div class="cl ${done?'done':''}">${med.name}</div>
+          <div style="font-size:11px;margin-top:2px">${med.qty?`<span style="background:var(--gold);color:#fff;font-weight:700;padding:1px 7px;border-radius:8px;margin-right:4px">${med.qty}</span>`:''}<span class="med-badge ${mt.cls}">${mt.l}</span></div>
+        </div>
+      </div>`;
     });
     h+=`</div>`;
   }
@@ -1717,7 +1722,7 @@ function delP(pid){requireAdmin(()=>{if(!confirm('ต้องการลบผ
 function uSum(){
   document.getElementById('st').textContent=S.patients.length;
   let d=0,pn=0;
-  S.patients.forEach(p=>{['D','N'].forEach(sh=>{const lg=gLog(p.id,curDate,sh);(sh==='D'?p.tasksD||[]:p.tasksN||[]).forEach(t=>{lg.tasks?.[t]?d++:pn++;});getMedsForShift(p,sh).forEach(med=>{med.meals.forEach(meal=>{lg.meds?.[medKey(med.name,meal)]?d++:pn++;});});});});
+  S.patients.forEach(p=>{['D','N'].forEach(sh=>{const lg=gLog(p.id,curDate,sh);(sh==='D'?p.tasksD||[]:p.tasksN||[]).forEach(t=>{lg.tasks?.[t]?d++:pn++;});getMedsForShift(p,sh).forEach(med=>{const k='sh_med||'+med.name;lg.meds?.[k]?d++:pn++;});});});
   document.getElementById('sd').textContent=d;document.getElementById('sp').textContent=pn;
 }
 
@@ -2115,8 +2120,8 @@ function buildRepText(){
       // MEDS — family sees only "ครบ/ไม่ครบ"
       const shMeds=getMedsForShift(p,sh);
       if(shMeds.length){
-        const totalMed=shMeds.reduce((a,m)=>a+m.meals.length,0);
-        const doneMed=shMeds.reduce((a,m)=>a+m.meals.filter(meal=>lg.meds?.[medKey(m.name,meal)]).length,0);
+        const totalMed=shMeds.length;
+        const doneMed=shMeds.filter(m=>lg.meds?.['sh_med||'+m.name]).length;
         if(doneMed===totalMed&&totalMed>0)rep+=`💊 ยา: ให้ยาครบทุกมื้อแล้ว ✅\n`;
         else if(doneMed>0)rep+=`💊 ยา: ให้ยาแล้ว ${doneMed}/${totalMed} มื้อ\n`;
         else rep+=`💊 ยา: ยังไม่ได้ให้ยา ⬜\n`;
