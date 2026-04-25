@@ -1442,7 +1442,39 @@ function rShift(p,sh,lg){
     <button class="opt ob ${lg.bath==='เช็ดตัวบนเตียง'?'sel':''}" onclick="sBath(${p.id},'${sh}','เช็ดตัวบนเตียง')">🛏️ เช็ดตัวบนเตียง</button>
   </div>`;}
 
-  // PAMPERS
+  // PHYSICAL THERAPY — เวร D เท่านั้น
+  if(sh==='D'){
+    const PT_ITEMS=['หมุนวงล้อ','ปั่นจักรยาน','ยกห่วง','นั่งรถเข็น','กระตุ้นนั่งข้างเตียง','เคาะปอด','ฝึกพูด'];
+    const ptDone=lg.pt||{};
+    h+=`<div class="dvr"></div><div class="sl">🏃 กายภาพบำบัด</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+      ${PT_ITEMS.map(item=>{
+        const sel=ptDone[item]||false;
+        return`<button class="food-btn ${sel?'fsel':''}" onclick="tPT(${p.id},'${sh}','${item}')">${item}</button>`;
+      }).join('')}
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;background:var(--bg);border-radius:8px;padding:6px 10px;border:1px solid var(--border)">
+      <span style="font-size:12px;color:var(--muted);white-space:nowrap">🚶 เดินราวจับ</span>
+      <input type="number" min="0" max="100" placeholder="รอบ" value="${ptDone['เดินราวจับ']||''}" 
+        onchange="sPTRounds(${p.id},'${sh}',this.value)" 
+        style="width:70px;border:1.5px solid var(--border);border-radius:7px;padding:4px 8px;font-family:'Sarabun',sans-serif;font-size:14px;font-weight:600;text-align:center;outline:none;background:#fff">
+      <span style="font-size:12px;color:var(--muted)">รอบ</span>
+      ${ptDone['เดินราวจับ']?`<span style="font-size:11px;color:var(--green);font-weight:600">✅ ${ptDone['เดินราวจับ']} รอบ</span>`:''}
+    </div>`;
+  }
+
+  // ACTIVITIES — เวร D เท่านั้น
+  if(sh==='D'){
+    const ACT_ITEMS=['ระบายสี','วาดภาพ','ฟังเพลง','ดูทีวี/ข่าว/หนัง','ทำขนม'];
+    const actDone=lg.activities||{};
+    h+=`<div class="dvr"></div><div class="sl">🎨 กิจกรรมนันทนาการ</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">
+      ${ACT_ITEMS.map(item=>{
+        const sel=actDone[item]||false;
+        return`<button class="food-btn ${sel?'fsel':''}" onclick="tActivity(${p.id},'${sh}','${item}')">${item}</button>`;
+      }).join('')}
+    </div>`;
+  }
   h+=`<div class="dvr"></div><div class="sl">👶 แพมเพิส (เวร ${sh})</div>
   <div class="pamp-row"><div class="pamp-lbl">จำนวนที่ใช้</div><div class="pc"><button class="pb" onclick="adjPamp(${p.id},'${sh}',-1)">−</button><div class="pnum">${lg.pampers||0}</div><button class="pb" onclick="adjPamp(${p.id},'${sh}',1)">+</button></div><span style="font-size:12px;color:var(--purple)">ตัว</span></div>`;
 
@@ -1598,6 +1630,9 @@ function tTask(pid,sh,t){const lg=eLog(pid,curDate,sh);if(!lg.tasks)lg.tasks={};
 function tMedKey(pid,sh,key){const lg=eLog(pid,curDate,sh);if(!lg.meds)lg.meds={};lg.meds[key]=!lg.meds[key];save();rPats();}
 function sVit(pid,sh,f,v){const lg=eLog(pid,curDate,sh);if(!lg.v)lg.v={};lg.v[f]=v;save();if(f==='status')rPats();}
 function sBath(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.bath=lg.bath===v?null:v;save();rPats();}
+function tPT(pid,sh,item){const lg=eLog(pid,curDate,sh);if(!lg.pt)lg.pt={};lg.pt[item]=!lg.pt[item];save();rPats();}
+function sPTRounds(pid,sh,val){const lg=eLog(pid,curDate,sh);if(!lg.pt)lg.pt={};lg.pt['เดินราวจับ']=val?parseInt(val):null;save();}
+function tActivity(pid,sh,item){const lg=eLog(pid,curDate,sh);if(!lg.activities)lg.activities={};lg.activities[item]=!lg.activities[item];save();rPats();}
 function sFoodT(pid,sh,mk,ft){const lg=eLog(pid,curDate,sh);if(!lg.food)lg.food={};if(!lg.food[mk])lg.food[mk]={};lg.food[mk].type=lg.food[mk].type===ft?null:ft;save();rPats();}
 function sFoodD(pid,sh,mk,f,v){const lg=eLog(pid,curDate,sh);if(!lg.food)lg.food={};if(!lg.food[mk])lg.food[mk]={};lg.food[mk][f]=v;save();}
 function sFoodMode(pid,sh,mode){const lg=eLog(pid,curDate,sh);lg.foodMode=mode;save();rPats();}
@@ -2148,6 +2183,17 @@ function buildRepText(){
             rep+=foodLine+'\n';
           }
         });
+      }
+      // PT and activities (D shift only)
+      if(sh==='D'){
+        const ptDone=lg.pt||{};
+        const ptItems=['หมุนวงล้อ','ปั่นจักรยาน','ยกห่วง','นั่งรถเข็น','กระตุ้นนั่งข้างเตียง','เคาะปอด','ฝึกพูด'];
+        const donePT=ptItems.filter(i=>ptDone[i]);
+        if(ptDone['เดินราวจับ'])donePT.push('เดินราวจับ '+ptDone['เดินราวจับ']+' รอบ');
+        if(donePT.length)rep+=`🏃 กายภาพ: ${donePT.join(', ')}\n`;
+        const actDone=lg.activities||{};
+        const doneAct=Object.keys(actDone).filter(k=>actDone[k]);
+        if(doneAct.length)rep+=`🎨 กิจกรรม: ${doneAct.join(', ')}\n`;
       }
       // wounds
       if((lg.wounds||[]).length)rep+=`🩹 แผล: ${lg.wounds.join(', ')}${lg.woundNote?' — '+lg.woundNote:''}\n`;
