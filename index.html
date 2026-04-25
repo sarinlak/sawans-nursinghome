@@ -352,6 +352,9 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);min
 
 <!-- PATIENTS -->
 <div id="pg-patients" class="pg active">
+  <div id="pinReminder" style="display:none;background:var(--rose-l);border:1.5px solid var(--rose);border-radius:10px;padding:9px 13px;font-size:12px;color:var(--rose);margin-bottom:8px;cursor:pointer" onclick="openPINSetup()">
+    🔐 ยังไม่ได้ตั้ง PIN ผู้ดูแล — พนักงานสามารถแก้ไขประวัติได้ กดที่นี่เพื่อตั้ง PIN
+  </div>
   <div class="sum-bar">
     <div class="sc"><div class="sn csk" id="st">0</div><div class="slb">ผู้สูงอายุ</div></div>
     <div class="sc"><div class="sn cgr" id="sd">0</div><div class="slb">งานเสร็จ</div></div>
@@ -393,10 +396,12 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);min
 
 <!-- HISTORY -->
 <div id="pg-history" class="pg">
-  <div class="sec-head"><div class="sec-t">📅 ประวัติรายคน</div></div>
-  <select class="fi" id="hpat" onchange="rHist()" style="margin-bottom:8px"><option value="">-- เลือกผู้สูงอายุ --</option></select>
-  <input type="month" class="fi" id="hmon" style="margin-bottom:8px" onchange="rHist()">
-  <div id="hList"><div class="empty"><div class="ei">📅</div>เลือกผู้สูงอายุและเดือน</div></div>
+  <div class="sec-head"><div class="sec-t">📋 ประวัติผู้สูงอายุ</div></div>
+  <select class="fi" id="hpat" onchange="rHist()" style="margin-bottom:10px"><option value="">-- เลือกผู้สูงอายุ --</option></select>
+  <div id="hProfile"></div>
+  <div style="margin-top:12px;font-family:'Kanit',sans-serif;font-size:14px;font-weight:600;margin-bottom:6px" id="hHistTitle" style="display:none">📅 ประวัติการบันทึก</div>
+  <input type="month" class="fi" id="hmon" style="margin-bottom:8px;display:none" onchange="rHistLog()">
+  <div id="hList"><div class="empty"><div class="ei">📋</div>เลือกผู้สูงอายุเพื่อดูประวัติ</div></div>
 </div>
 
 <!-- HANDOVER PAGE -->
@@ -1049,7 +1054,11 @@ function init(){
   });
   renderAll();
 }
-function renderAll(){rWarn();rApptAlerts();rPats();rGenPat();rPampSummary();rSupplyPat();uSum();uExpSel();uHistSel();uPhotoFilter();rPhotos();rActs();uPhotoExportNote();rHandover();}
+function renderAll(){
+  rWarn();rApptAlerts();rPats();rGenPat();rPampSummary();rSupplyPat();uSum();uExpSel();uHistSel();uPhotoFilter();rPhotos();rActs();uPhotoExportNote();rHandover();
+  const pr=document.getElementById('pinReminder');
+  if(pr)pr.style.display=hasPIN()?'none':'block';
+}
 
 function sw(name,btn){
   document.querySelectorAll('.pg').forEach(p=>p.classList.remove('active'));
@@ -2013,11 +2022,98 @@ function rSupSum(){} // kept for compatibility
 // ============================================================
 // HISTORY
 // ============================================================
-function uHistSel(){const sel=document.getElementById('hpat');const cur=sel.value;sel.innerHTML='<option value="">-- เลือกผู้สูงอายุ --</option>'+S.patients.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');if(cur)sel.value=cur;}
+function uHistSel(){
+  const sel=document.getElementById('hpat');const cur=sel.value;
+  sel.innerHTML='<option value="">-- เลือกผู้สูงอายุ --</option>'+sortPatients(S.patients).map(p=>`<option value="${p.id}">${p.name}${p.room?' ('+p.room+')':''}</option>`).join('');
+  if(cur)sel.value=cur;
+}
+
 function rHist(){
-  const pid=document.getElementById('hpat').value,month=document.getElementById('hmon').value,list=document.getElementById('hList');
-  if(!pid||!month){list.innerHTML=`<div class="empty"><div class="ei">📅</div>เลือกผู้สูงอายุและเดือน</div>`;return;}
-  const p=S.patients.find(x=>x.id==pid);if(!p){list.innerHTML=`<div class="empty">ไม่พบข้อมูล</div>`;return;}
+  const pid=document.getElementById('hpat').value;
+  const profile=document.getElementById('hProfile');
+  const hList=document.getElementById('hList');
+  const hmon=document.getElementById('hmon');
+  const hTitle=document.getElementById('hHistTitle');
+
+  if(!pid){
+    profile.innerHTML='';
+    hList.innerHTML=`<div class="empty"><div class="ei">📋</div>เลือกผู้สูงอายุเพื่อดูประวัติ</div>`;
+    hmon.style.display='none';
+    if(hTitle)hTitle.style.display='none';
+    return;
+  }
+  const p=S.patients.find(x=>x.id==pid);if(!p)return;
+
+  // === PROFILE SECTION ===
+  const appts=(p.appointments&&p.appointments.length)?p.appointments:(p.appointment?[{date:p.appointment,doctor:p.doctor||''}]:[]);
+  const latestMeds=p.medications||[];
+  const dobStr=p.dob?new Date(p.dob+'T00:00:00').toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'}):'ไม่ระบุ';
+
+  let profHTML=`<div class="card" style="padding:14px;margin-bottom:10px">
+    <div style="display:flex;align-items:center;gap:11px;margin-bottom:12px">
+      <div class="av" style="width:46px;height:46px;font-size:19px">${p.name.replace(/คุณ|นาย|นาง|นางสาว/g,'').trim().charAt(0)||'?'}</div>
+      <div>
+        <div style="font-size:16px;font-weight:700;color:var(--text)">${p.name}</div>
+        <div style="font-size:12px;color:var(--muted)">${p.room?p.room+' • ':''}${p.age?p.age+' ปี':''}</div>
+      </div>
+    </div>
+
+    <div class="dvr"></div>
+
+    <div class="hv-row"><span class="hv-lbl">📅 วันเกิด</span><span class="hv-val">${dobStr}</span></div>
+    <div class="hv-row"><span class="hv-lbl">🩺 โรคประจำตัว</span><span class="hv-val">${p.diag||'ไม่ระบุ'}</span></div>
+    <div class="hv-row"><span class="hv-lbl">🚨 รพ.ฉุกเฉิน</span><span class="hv-val" style="color:var(--rose);font-weight:600">${p.emergHosp||'ไม่ระบุ'}</span></div>
+
+    <div class="dvr"></div>
+
+    <div class="sl" style="margin-bottom:5px">🗓️ นัดพบแพทย์</div>
+    ${appts.length?appts.map(a=>{
+      const diff=daysDiff(a.date,tday());
+      const col=diff<0?'var(--rose)':diff<=7?'var(--purple)':'var(--text)';
+      return`<div style="background:var(--bg);border-radius:8px;padding:6px 10px;margin-bottom:4px;border:1px solid var(--border)">
+        <span style="font-weight:600;color:${col}">${a.date}</span>
+        ${diff>=0?`<span style="font-size:11px;color:var(--muted);margin-left:6px">อีก ${diff} วัน</span>`:`<span style="font-size:11px;color:var(--rose);margin-left:6px">⚠️ เกินกำหนด ${Math.abs(diff)} วัน</span>`}
+        ${a.doctor?`<div style="font-size:12px;color:var(--muted);margin-top:2px">🏥 ${a.doctor}</div>`:''}
+      </div>`;
+    }).join(''):`<div style="font-size:13px;color:var(--muted)">ยังไม่มีนัด</div>`}
+
+    <div class="dvr"></div>
+
+    <div class="sl" style="margin-bottom:5px">💊 ยาล่าสุด</div>
+    ${latestMeds.length?latestMeds.map(m=>{
+      const mt=MED_METHODS.find(x=>x.k===m.method)||MED_METHODS[0];
+      const badge=m.prn?'PRN':m.evenDays?'วันคู่':m.specificDays&&m.days?.length?m.days.map(d=>getDowLabel(d)).join(' '):'';
+      return`<div style="display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid #EEF4FC">
+        <span style="flex:1;font-size:13px;font-weight:500">${m.name}</span>
+        ${m.qty?`<span style="background:var(--sky);color:#fff;font-size:11px;font-weight:700;padding:1px 7px;border-radius:8px">${m.qty}</span>`:''}
+        ${badge?`<span style="font-size:10px;background:var(--purple-l);color:var(--purple);padding:1px 6px;border-radius:8px">${badge}</span>`:''}
+        <span class="med-badge ${mt.cls}" style="font-size:10px">${mt.l}</span>
+      </div>`;
+    }).join(''):`<div style="font-size:13px;color:var(--muted)">ยังไม่มียา</div>`}
+
+    ${p.adl?.score!==undefined?`<div class="dvr"></div>
+    <div class="hv-row"><span class="hv-lbl">📋 Barthel ADL</span>
+      <span class="adl-badge ${adlLevel(p.adl.score).cls}" style="font-size:11px;padding:3px 9px">${adlLevel(p.adl.score).label} (${p.adl.score}/20)</span>
+    </div>
+    <div class="hv-row"><span class="hv-lbl">วันประเมิน</span><span class="hv-val">${p.adl.date||'-'}</span></div>`:''}
+
+  </div>`;
+
+  profile.innerHTML=profHTML;
+
+  // show month picker and log section
+  if(hmon)hmon.style.display='block';
+  if(hTitle)hTitle.style.display='block';
+  if(!hmon.value)hmon.value=tday().slice(0,7);
+  rHistLog();
+}
+
+function rHistLog(){
+  const pid=document.getElementById('hpat').value;
+  const month=document.getElementById('hmon').value;
+  const list=document.getElementById('hList');
+  if(!pid||!month){list.innerHTML='';return;}
+  const p=S.patients.find(x=>x.id==pid);if(!p){return;}
   const days=Object.keys((S.logs[pid]||{})).filter(d=>d.startsWith(month)).sort().reverse();
   if(!days.length){list.innerHTML=`<div class="empty"><div class="ei">📅</div>ไม่มีข้อมูลในเดือนนี้</div>`;return;}
   list.innerHTML=days.map(date=>{
@@ -2570,9 +2666,12 @@ function rHandover(){
   const el=document.getElementById('hvList');
   const lbl=document.getElementById('hvDateLbl');
   if(!el)return;
+  // always sync button states
+  const bD=document.getElementById('hvD');const bN=document.getElementById('hvN');
+  if(bD)bD.className='ssb'+(hvSh==='D'?' aD':'');
+  if(bN)bN.className='ssb'+(hvSh==='N'?' aN':'');
   const shDate=getShiftDate(hvSh);
-  if(lbl)lbl.textContent=`${hvSh==='D'?'☀️ เวร D (08:00–16:00)':'🌙 เวร N (16:00–08:00)'} • ${fmtTH(shDate)}`;
-
+  if(lbl)lbl.textContent=(hvSh==='D'?'☀️ เวร D (08:00–16:00)':'🌙 เวร N (16:00–08:00)')+' • '+fmtTH(shDate);
   if(!S.patients.length){el.innerHTML=`<div class="empty"><div class="ei">📋</div>ยังไม่มีผู้สูงอายุ</div>`;return;}
 
   el.innerHTML=sortPatients(S.patients).map(p=>{
