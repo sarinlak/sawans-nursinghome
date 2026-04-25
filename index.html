@@ -977,11 +977,15 @@ function adjPamp(pid,sh,d){const lg=eLog(pid,curDate,sh);lg.pampers=Math.max(0,(
 
 function getMedsForShift(p,sh){
   const sm=sh==='D'?MEDS_D:MEDS_N;
-  // day of week for the shift's date (0=Sun,1=Mon,...6=Sat)
   const shDate=getShiftDate(sh);
   const dow=new Date(shDate+'T00:00:00').getDay();
+  const dayOfMonth=new Date(shDate+'T00:00:00').getDate();
   return(p.medications||[]).filter(m=>!m.prn).map(med=>{
-    // if specificDays, check if today is one of the allowed days
+    // เฉพาะวันคู่ — วันที่เป็นเลขคู่เท่านั้น
+    if(med.evenDays){
+      if(dayOfMonth%2!==0)return null;
+    }
+    // เฉพาะบางวัน (วันในสัปดาห์)
     if(med.specificDays&&med.days&&med.days.length){
       if(!med.days.includes(dow))return null;
     }
@@ -1133,7 +1137,7 @@ function saveP(){
   // ใช้รายการมาตรฐานเสมอ ไม่ต้องเลือก
   const tasksD=[...DEFAULT_TASKS_D];
   const tasksN=[...DEFAULT_TASKS_N];
-  const medications=tmpMeds.filter(m=>m.name.trim()).map(m=>({name:m.name.trim(),meals:m.meals,method:m.method||'eat',qty:m.qty||'',prn:m.prn||false,specificDays:m.specificDays||false,days:m.days||[],eyeSide:m.eyeSide||null}));
+  const medications=tmpMeds.filter(m=>m.name.trim()).map(m=>({name:m.name.trim(),meals:m.meals,method:m.method||'eat',qty:m.qty||'',prn:m.prn||false,evenDays:m.evenDays||false,specificDays:m.specificDays||false,days:m.days||[],eyeSide:m.eyeSide||null}));
   const appointments=tmpAppts.filter(a=>a.date).map(a=>({date:a.date,doctor:a.doctor||''}));
   const dob=document.getElementById('pDob').value;
   const emergHosp=document.getElementById('pEmergHosp').value.trim();
@@ -1190,6 +1194,10 @@ function renderMedEntries(){
         <span style="color:var(--gold);font-weight:600">PRN (ตามอาการ)</span>
       </label>
       <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
+        <input type="checkbox" ${med.evenDays?'checked':''} onchange="setMedEvenDays('${med.id}',this.checked,'tmp')">
+        <span style="color:var(--teal);font-weight:600">เฉพาะวันคู่</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
         <input type="checkbox" ${med.specificDays?'checked':''} onchange="setMedSpecificDays('${med.id}',this.checked,'tmp')">
         <span style="color:var(--purple);font-weight:600">เฉพาะบางวัน</span>
       </label>
@@ -1210,7 +1218,9 @@ function renderMedEntries(){
   </div>`).join('');
 }
 function setMedEyeSide(id,val,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m){m.eyeSide=m.eyeSide===val?null:val;}src==='tmp'?renderMedEntries():renderReMedEntries();}{const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m){m.prn=val;if(val){m.meals=[];m.specificDays=false;}}src==='tmp'?renderMedEntries():renderReMedEntries();}
-function setMedSpecificDays(id,val,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m){m.specificDays=val;if(!val)m.days=[];if(val)m.prn=false;}src==='tmp'?renderMedEntries():renderReMedEntries();}
+function setMedEvenDays(id,val,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m){m.evenDays=val;if(val){m.prn=false;m.specificDays=false;}}src==='tmp'?renderMedEntries():renderReMedEntries();}
+function setMedPrn(id,val,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m){m.prn=val;if(val){m.meals=[];m.specificDays=false;m.evenDays=false;}}src==='tmp'?renderMedEntries():renderReMedEntries();}
+function setMedSpecificDays(id,val,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m){m.specificDays=val;if(!val)m.days=[];if(val){m.prn=false;m.evenDays=false;}}src==='tmp'?renderMedEntries():renderReMedEntries();}
 function toggleMedDay(id,day,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(!m)return;if(!m.days)m.days=[];m.days=m.days.includes(day)?m.days.filter(d=>d!==day):[...m.days,day];src==='tmp'?renderMedEntries():renderReMedEntries();}
 function setMedName(id,val,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m)m.name=val;}
 function setMedQty(id,val,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m)m.qty=val;}
@@ -1252,6 +1262,10 @@ function renderReMedEntries(){
         <span style="color:var(--gold);font-weight:600">PRN (ตามอาการ)</span>
       </label>
       <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
+        <input type="checkbox" ${med.evenDays?'checked':''} onchange="setMedEvenDays('${med.id}',this.checked,'re')">
+        <span style="color:var(--teal);font-weight:600">เฉพาะวันคู่</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
         <input type="checkbox" ${med.specificDays?'checked':''} onchange="setMedSpecificDays('${med.id}',this.checked,'re')">
         <span style="color:var(--purple);font-weight:600">เฉพาะบางวัน</span>
       </label>
@@ -1276,7 +1290,7 @@ function saveReMed(){
   const date=document.getElementById('reMedDate').value||tday();
   const doc=document.getElementById('reMedDoc').value.trim();
   const appt=document.getElementById('reMedAppt').value;
-  const newMeds=reMedTmp.filter(m=>m.name.trim()).map(m=>({name:m.name.trim(),meals:m.meals,method:m.method||'eat',qty:m.qty||'',prn:m.prn||false,specificDays:m.specificDays||false,days:m.days||[],eyeSide:m.eyeSide||null}));
+  const newMeds=reMedTmp.filter(m=>m.name.trim()).map(m=>({name:m.name.trim(),meals:m.meals,method:m.method||'eat',qty:m.qty||'',prn:m.prn||false,evenDays:m.evenDays||false,specificDays:m.specificDays||false,days:m.days||[],eyeSide:m.eyeSide||null}));
   // save to history
   if(!p.medHistory)p.medHistory=[];
   p.medHistory.unshift({date,doctor:doc,meds:newMeds});
@@ -1305,10 +1319,27 @@ function openMedHist(pid){
 // ============================================================
 // PATIENTS
 // ============================================================
+function sortPatients(patients){
+  return [...patients].sort((a,b)=>{
+    const parseRoom=r=>{
+      if(!r)return{type:2,num:999}; // no room → last
+      const s=String(r).trim().toUpperCase();
+      const vipMatch=s.match(/VIP\s*(\d+)/i);
+      if(vipMatch)return{type:0,num:parseInt(vipMatch[1])};
+      const numMatch=s.match(/(\d+)/);
+      if(numMatch)return{type:1,num:parseInt(numMatch[1])};
+      return{type:1,num:999};
+    };
+    const ra=parseRoom(a.room),rb=parseRoom(b.room);
+    if(ra.type!==rb.type)return ra.type-rb.type;
+    return ra.num-rb.num;
+  });
+}
+
 function rPats(){
   const list=document.getElementById('pList');
   if(!S.patients.length){list.innerHTML=`<div class="empty"><div class="ei">👴</div>ยังไม่มีข้อมูลผู้สูงอายุ<br><small>กด "เพิ่ม" เพื่อเริ่มต้น</small></div>`;return;}
-  list.innerHTML=S.patients.map(p=>{
+  list.innerHTML=sortPatients(S.patients).map(p=>{
     const sh=aSh[p.id]||'D';const lg=gLog(p.id,curDate,sh);const isOpen=oC[p.id];
     const ini=p.name.replace(/คุณ|นาย|นาง|นางสาว/g,'').trim().charAt(0)||'?';
     const tasks=sh==='D'?(p.tasksD?.length?p.tasksD:DEFAULT_TASKS_D):(p.tasksN?.length?p.tasksN:DEFAULT_TASKS_N);
@@ -1488,31 +1519,9 @@ function rShift(p,sh,lg){
       const key='sh_med||'+med.name;
       const done=lg.meds?.[key]||false;
       const mt=MED_METHODS.find(m=>m.k===med.method)||MED_METHODS[0];
-      const dayBadge=med.specificDays&&med.days?.length?`<span style="font-size:10px;background:var(--purple-l);color:var(--purple);padding:1px 6px;border-radius:10px;margin-left:3px">${med.days.map(d=>getDowLabel(d)).join(' ')}</span>`:'';
-      const eyeBadge=med.method==='drop'&&med.eyeSide?`<span style="font-size:10px;background:var(--sky-l);color:var(--sky);padding:1px 6px;border-radius:10px;margin-left:3px">👁️ ${med.eyeSide}</span>`:'';
+      const dayBadge=med.evenDays?'<span style="font-size:10px;background:#E6F9F7;color:var(--teal);padding:1px 6px;border-radius:10px;margin-left:3px">วันคู่</span>':(med.specificDays&&med.days&&med.days.length?'<span style="font-size:10px;background:var(--purple-l);color:var(--purple);padding:1px 6px;border-radius:10px;margin-left:3px">'+med.days.map(function(d){return getDowLabel(d);}).join(' ')+'</span>':'');
+      const eyeBadge=(med.method==='drop'&&med.eyeSide)?'<span style="font-size:10px;background:var(--sky-l);color:var(--sky);padding:1px 6px;border-radius:10px;margin-left:3px">👁️ '+med.eyeSide+'</span>':'';
       h+=`<div class="ci" style="padding:8px 0;align-items:flex-start">
-        <div class="ck ${done?'on':''}" onclick="tMedKey(${p.id},'${sh}','${key.replace(/'/g,"\\'")}')"></div>
-        <div style="flex:1">
-          <div class="cl ${done?'done':''}"><strong>${med.name}</strong>${dayBadge}${eyeBadge}</div>
-          <div style="font-size:12px;margin-top:3px">
-            ${med.qty?`<span style="background:var(--sky);color:#fff;font-weight:700;padding:2px 9px;border-radius:8px;margin-right:5px">${med.qty}</span>`:''}
-            <span style="color:var(--muted)">${med.meals.join(' • ')}</span>
-            <span class="med-badge ${mt.cls}" style="margin-left:4px">${mt.l}</span>
-          </div>
-        </div>
-        <span style="font-size:11px;font-weight:700;color:${done?'var(--green)':'var(--muted)'}">
-          ${done?'✅':'⬜'}
-        </span>
-      </div>`;
-    });
-  }
-  // PRN meds
-  if(prnMeds.length){
-    h+=`<div class="prn-box"><div class="prn-lbl">💊 ยาตามอาการ (PRN)</div>`;
-    prnMeds.forEach(med=>{
-      const key='prn||'+med.name;const done=lg.meds?.[key]||false;
-      const mt=MED_METHODS.find(m=>m.k===med.method)||MED_METHODS[0];
-      h+=`<div class="ci">
         <div class="ck ${done?'on':''}" onclick="tMedKey(${p.id},'${sh}','${key.replace(/'/g,"\\'")}')"></div>
         <div style="flex:1">
           <div class="cl ${done?'done':''}">${med.name}</div>
@@ -1782,7 +1791,7 @@ function saveADL(){const total=Object.values(adlAnswers).reduce((a,b)=>a+b,0);co
 function rGenPat(){
   const el=document.getElementById('genPatList');
   if(!S.patients.length){el.innerHTML=`<div class="empty"><div class="ei">🧹</div>ยังไม่มีผู้สูงอายุ</div>`;return;}
-  el.innerHTML=S.patients.map(p=>{
+  el.innerHTML=sortPatients(S.patients).map(p=>{
     const isOpen=oC['gen_'+p.id];const ini=p.name.replace(/คุณ|นาย|นาง|นางสาว/g,'').trim().charAt(0)||'?';
     const lgD=gLog(p.id,curDate,'D'),lgN=gLog(p.id,curDate,'N');
     const dD=(p.tasksD||[]).filter(t=>lgD.tasks?.[t]).length,dN=(p.tasksN||[]).filter(t=>lgN.tasks?.[t]).length;
@@ -1797,7 +1806,7 @@ function rPampSummary(){
   const el=document.getElementById('pampSummary');
   if(!S.patients.length){el.innerHTML=`<div style="font-size:13px;color:var(--muted)">ยังไม่มีผู้สูงอายุ</div>`;return;}
   let tD=0,tN=0;
-  const rows=S.patients.map(p=>{const d=gLog(p.id,curDate,'D').pampers||0,n=gLog(p.id,curDate,'N').pampers||0;tD+=d;tN+=n;return`<tr><td>${p.name}</td><td style="text-align:center;font-weight:700;color:var(--sky)">${d||'-'}</td><td style="text-align:center;font-weight:700;color:var(--purple)">${n||'-'}</td><td style="text-align:center;font-weight:700">${(d+n)||'-'}</td></tr>`;}).join('');
+  const rows=sortPatients(S.patients).map(p=>{const d=gLog(p.id,curDate,'D').pampers||0,n=gLog(p.id,curDate,'N').pampers||0;tD+=d;tN+=n;return`<tr><td>${p.name}</td><td style="text-align:center;font-weight:700;color:var(--sky)">${d||'-'}</td><td style="text-align:center;font-weight:700;color:var(--purple)">${n||'-'}</td><td style="text-align:center;font-weight:700">${(d+n)||'-'}</td></tr>`;}).join('');
   el.innerHTML=`<div style="overflow-x:auto"><table class="tbl"><thead><tr class="thP"><th>ชื่อ</th><th style="text-align:center">☀️ D</th><th style="text-align:center">🌙 N</th><th style="text-align:center">รวม</th></tr></thead><tbody>${rows}<tr style="background:var(--purple-l)"><td class="tot">รวม</td><td class="tot" style="text-align:center">${tD}</td><td class="tot" style="text-align:center">${tN}</td><td class="tot" style="text-align:center">${tD+tN}</td></tr></tbody></table></div>`;
 }
 
@@ -1840,7 +1849,7 @@ function getDatesInRange(start,end){
 function rSupplyPat(){
   const el=document.getElementById('supplyPatList');
   if(!S.patients.length){el.innerHTML=`<div class="empty"><div class="ei">📦</div>ยังไม่มีผู้สูงอายุ</div>`;return;}
-  el.innerHTML=S.patients.map(p=>{
+  el.innerHTML=sortPatients(S.patients).map(p=>{
     const isOpen=oC['sup_'+p.id];const ini=p.name.replace(/คุณ|นาย|นาง|นางสาว/g,'').trim().charAt(0)||'?';
     const tot=SUP_ITEMS.reduce((a,i)=>a+gSup(p.id,curDate,i.k),0);
     const admitInfo=p.admitDate?`เข้า ${new Date(p.admitDate+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'})}`:' ⚠️ ยังไม่ระบุวันเข้าพัก';
@@ -2566,7 +2575,7 @@ function rHandover(){
 
   if(!S.patients.length){el.innerHTML=`<div class="empty"><div class="ei">📋</div>ยังไม่มีผู้สูงอายุ</div>`;return;}
 
-  el.innerHTML=S.patients.map(p=>{
+  el.innerHTML=sortPatients(S.patients).map(p=>{
     const lg=gLog(p.id,shDate,hvSh);
     const hv=gHvLog(p.id,hvSh);
     const v=lg.v||{};
