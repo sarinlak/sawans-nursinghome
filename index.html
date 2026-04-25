@@ -403,9 +403,9 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);min
 <div id="pg-handover" class="pg">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
     <div style="font-family:'Kanit',sans-serif;font-size:15px;font-weight:600">📋 ส่งเวร</div>
-    <div class="ssel" style="margin:0;gap:6px">
-      <button class="ssb aD" id="hvD" onclick="setHvSh('D')">☀️ เวร D</button>
-      <button class="ssb" id="hvN" onclick="setHvSh('N')">🌙 เวร N</button>
+    <div style="display:flex;gap:6px">
+      <button id="hvD" class="ssb aD" onclick="setHvSh('D')">☀️ เวร D</button>
+      <button id="hvN" class="ssb" onclick="setHvSh('N')">🌙 เวร N</button>
     </div>
   </div>
   <div style="font-size:12px;color:var(--muted);margin-bottom:10px" id="hvDateLbl"></div>
@@ -671,8 +671,8 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);min
 // ============================================================
 const DK='sawanNH10';
 const MEAL_TIMES=['ก่อนอาหารเช้า','หลังอาหารเช้า','ก่อนอาหารเที่ยง','หลังอาหารเที่ยง','ก่อนอาหารเย็น','หลังอาหารเย็น','ก่อนนอน'];
-const MEDS_D=['ก่อนอาหารเช้า','หลังอาหารเช้า','ก่อนอาหารเที่ยง','หลังอาหารเที่ยง','ก่อนอาหารเย็น'];
-const MEDS_N=['ก่อนอาหารเย็น','หลังอาหารเย็น','ก่อนนอน'];
+const MEDS_D=['หลังอาหารเช้า','ก่อนอาหารเที่ยง','หลังอาหารเที่ยง','ก่อนอาหารเย็น'];
+const MEDS_N=['ก่อนอาหารเช้า','หลังอาหารเย็น','ก่อนนอน'];
 const VS_TIMES=['02:00','06:00','10:00','14:00','18:00','22:00'];
 const MED_METHODS=[
   {k:'eat',l:'กิน',cls:'mb-eat'},{k:'drop',l:'หยอด',cls:'mb-drop'},
@@ -681,6 +681,7 @@ const MED_METHODS=[
 ];
 const SUP_ITEMS=[
   {k:'pampers',  n:'แพมเพิส',      u:'ห่อ'},
+  {k:'glucerna', n:'Glucerna',     u:'กระป๋อง'},
   {k:'gloves',   n:'ถุงมือ',        u:'กล่อง'},
   {k:'wetTissue',n:'ทิชชูเปียก',   u:'ห่อ'},
   {k:'nss',      n:'NSS',          u:'ขวด'},
@@ -747,32 +748,39 @@ let S={patients:[],acts:[],photos:[],logs:{},supplyLogs:{}};
 try{const x=localStorage.getItem(DK);if(x)S=JSON.parse(x);}catch(e){}
 
 // ---- Firebase state ----
-let db=null,fbUnsubscribe=null,fbSaving=false;
+let db=null,fbUnsubscribe=null,fbSyncTimer=null,fbLastSave=0,fbIsRemoteUpdate=false;
 const FB_CFG_KEY='sawanNH_fbConfig';
 
-// Dual-mode save: Firebase if connected, else localStorage
+// ---- SAVE — always local first, then Firebase debounced ----
 const save=()=>{
-  // Always save locally as backup
+  // 1. บันทึก localStorage ทันที
   try{localStorage.setItem(DK,JSON.stringify(S));}catch(e){toast('พื้นที่เต็ม! ลองลบรูปบางรูป');}
-  // If Firebase connected, also push to Firestore
-  if(db&&!fbSaving){
-    fbSaving=true;
-    // Split photos out (too large for single doc) — save separately
-    const{photos,...dataNoPhotos}=S;
-    db.collection('nhData').doc('main').set(dataNoPhotos)
-      .then(()=>{
-        // Save photos in batches of 5 (each doc max 1MB)
-        const chunks=[];for(let i=0;i<photos.length;i+=5)chunks.push(photos.slice(i,i+5));
-        return Promise.all(chunks.map((ch,i)=>db.collection('nhData').doc('photos_'+i).set({photos:ch,chunk:i})));
-      })
-      .then(()=>{fbSaving=false;showSyncStatus('✅ ซิงค์แล้ว');})
-      .catch(err=>{fbSaving=false;showSyncStatus('⚠️ ซิงค์ไม่ได้: '+err.code);});
+  // 2. ถ้าเชื่อม Firebase → debounce 800ms แล้วค่อย push
+  if(db){
+    clearTimeout(fbSyncTimer);
+    fbSyncTimer=setTimeout(()=>pushToFirebase(),800);
   }
 };
 
+function pushToFirebase(){
+  if(!db)return;
+  const{photos,...dataNoPhotos}=S;
+  // แสดงสถานะกำลังซิงค์
+  showSyncStatus('⏳ กำลังซิงค์...');
+  db.collection('nhData').doc('main').set(dataNoPhotos)
+    .then(()=>{
+      fbLastSave=Date.now();
+      showSyncStatus('✅ ซิงค์แล้ว '+new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}));
+      // save photos in chunks
+      const chunks=[];for(let i=0;i<photos.length;i+=5)chunks.push(photos.slice(i,i+5));
+      if(chunks.length)Promise.all(chunks.map((ch,i)=>db.collection('nhData').doc('photos_'+i).set({photos:ch,chunk:i}))).catch(()=>{});
+    })
+    .catch(err=>{showSyncStatus('⚠️ ซิงค์ไม่ได้: '+(err.code||err.message));});
+}
+
 function showSyncStatus(msg){
-  document.getElementById('syncMsg').textContent=msg;
-  document.getElementById('syncBar').style.display='block';
+  const el=document.getElementById('syncMsg');const bar=document.getElementById('syncBar');
+  if(el)el.textContent=msg;if(bar)bar.style.display='block';
 }
 
 // ---- Connect Firebase ----
@@ -789,40 +797,41 @@ function connectFirebase(){
 
 function initFirebase(cfg){
   try{
-    // Init or reuse app
-    let app;
-    try{app=firebase.app();}catch(e){app=firebase.initializeApp(cfg);}
+    let app;try{app=firebase.app();}catch(e){app=firebase.initializeApp(cfg);}
     db=firebase.firestore(app);
-    showSyncStatus('☁️ กำลังโหลดข้อมูลจาก Firebase...');
+    // Enable offline persistence
+    db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
+    showSyncStatus('☁️ กำลังเชื่อมต่อ Firebase...');
     document.getElementById('syncBar').style.display='block';
 
-    // Real-time listener on main doc
     if(fbUnsubscribe)fbUnsubscribe();
-    fbUnsubscribe=db.collection('nhData').doc('main').onSnapshot(snap=>{
+    fbUnsubscribe=db.collection('nhData').doc('main').onSnapshot({includeMetadataChanges:false},snap=>{
+      // ถ้าเราเพิ่งเซฟไปเอง (<2 วิ) ไม่ต้อง overwrite
+      if(Date.now()-fbLastSave<2000)return;
       if(!snap.exists){
-        // First time — push local data to Firebase
-        save();showSyncStatus('☁️ อัปโหลดข้อมูลครั้งแรกแล้ว');
-      } else {
-        const remote=snap.data();
-        // Merge: use remote but keep local photos until photo sync done
-        S={...S,...remote};
-        // Load photos
-        db.collection('nhData').where('chunk','>=',0).get().then(qs=>{
-          const allPhotos=[];
-          qs.forEach(d=>{const dat=d.data();if(dat.photos)allPhotos.push(...dat.photos);});
-          S.photos=allPhotos;
-          try{localStorage.setItem(DK,JSON.stringify(S));}catch(e){}
-          renderAll();
-        });
+        // ครั้งแรก push ข้อมูลขึ้น
+        pushToFirebase();
+        showSyncStatus('☁️ อัปโหลดข้อมูลครั้งแรก...');
+        return;
+      }
+      // รับข้อมูลจาก remote — ใช้ deep merge เพื่อไม่ให้ข้อมูลหาย
+      const remote=snap.data();
+      const merged=deepMerge(S,remote);
+      S=merged;
+      // โหลดรูป
+      db.collection('nhData').where('chunk','>=',0).get().then(qs=>{
+        const allPhotos=[];qs.forEach(d=>{const dat=d.data();if(dat.photos)allPhotos.push(...dat.photos);});
+        if(allPhotos.length)S.photos=allPhotos;
         try{localStorage.setItem(DK,JSON.stringify(S));}catch(e){}
         renderAll();
-        showSyncStatus('☁️ ซิงค์แล้ว — ข้อมูล realtime');
-      }
-    },err=>{showSyncStatus('❌ เชื่อมต่อไม่ได้: '+err.message);});
+      }).catch(()=>{});
+      try{localStorage.setItem(DK,JSON.stringify(S));}catch(e){}
+      renderAll();
+      showSyncStatus('☁️ ซิงค์แล้ว — realtime');
+    },err=>{showSyncStatus('❌ '+err.message);});
 
-    // Update status card
     document.getElementById('fbStatusCard').style.display='block';
-    document.getElementById('fbStatusDetail').textContent='Project: '+cfg.projectId+' | ข้อมูลซิงค์ทุกครั้งที่บันทึก';
+    document.getElementById('fbStatusDetail').textContent='Project: '+cfg.projectId+' | ซิงค์ทุกครั้งที่บันทึก';
     toast('เชื่อมต่อ Firebase สำเร็จ ☁️');
   }catch(err){
     toast('เกิดข้อผิดพลาด: '+err.message);
@@ -830,10 +839,34 @@ function initFirebase(cfg){
   }
 }
 
+// Deep merge: remote wins for scalars, but local wins for arrays/objects that are newer
+function deepMerge(local,remote){
+  if(typeof remote!=='object'||remote===null)return remote;
+  if(Array.isArray(remote)){
+    // for arrays (patients, acts etc.) prefer whichever is longer/newer
+    if(Array.isArray(local)&&local.length>=remote.length)return local;
+    return remote;
+  }
+  const result={...local};
+  for(const key of Object.keys(remote)){
+    if(!(key in local)){result[key]=remote[key];}
+    else if(typeof remote[key]==='object'&&remote[key]!==null&&!Array.isArray(remote[key])){
+      result[key]=deepMerge(local[key],remote[key]);
+    } else if(Array.isArray(remote[key])){
+      // arrays: keep local if longer
+      if(Array.isArray(local[key])&&local[key].length>=remote[key].length)result[key]=local[key];
+      else result[key]=remote[key];
+    } else {
+      result[key]=remote[key];
+    }
+  }
+  return result;
+}
+
 function disconnectFirebase(){
   if(!confirm('ยกเลิกการเชื่อมต่อ Firebase?\nข้อมูลในเครื่องยังอยู่ครบ'))return;
   if(fbUnsubscribe){fbUnsubscribe();fbUnsubscribe=null;}
-  db=null;
+  db=null;clearTimeout(fbSyncTimer);
   localStorage.removeItem(FB_CFG_KEY);
   document.getElementById('syncBar').style.display='none';
   document.getElementById('fbStatusCard').style.display='none';
@@ -1255,8 +1288,13 @@ function rPats(){
       </div>
       <div id="cb-${p.id}" class="cbody ${isOpen?'':'h'}">
         ${!isToday()?`<div class="back-badge">📅 กำลังบันทึกวัน ${fmtShort(curDate)}</div>`:''}
-        ${p.adl?.score!==undefined?`<div class="adl-score-bar"><span style="font-size:12px;font-weight:600">📋 Barthel ADL</span><span class="adl-badge ${adlLevel(p.adl.score).cls}" style="font-size:11px;padding:3px 9px">${adlLevel(p.adl.score).label} (${p.adl.score}/20)</span></div>`:
-        `<div style="background:var(--rose-l);border:1px solid var(--rose);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--rose);margin-bottom:4px">⚠️ ยังไม่ได้ประเมิน ADL</div>`}
+        ${(()=>{
+          if(p.adl?.score===undefined)return`<div style="background:var(--rose-l);border:1px solid var(--rose);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--rose);margin-bottom:4px">⚠️ ยังไม่ได้ประเมิน ADL</div>`;
+          const lv=adlLevel(p.adl.score);
+          const daysSince=p.adl.date?daysDiff(tday(),p.adl.date):0;
+          const remind=daysSince>=90?`<div style="background:var(--gold-l);border:1px solid var(--gold);border-radius:8px;padding:5px 10px;font-size:12px;color:var(--gold);margin-top:3px">🔔 ครบ ${Math.floor(daysSince/30)} เดือนแล้ว — ถึงเวลาประเมิน ADL ใหม่!</div>`:'';
+          return`<div class="adl-score-bar"><span style="font-size:12px;font-weight:600">📋 Barthel ADL</span><span class="adl-badge ${lv.cls}" style="font-size:11px;padding:3px 9px">${lv.label} (${p.adl.score}/20)</span></div>${remind}`;
+        })()}
         ${p.emergHosp?`<div style="background:var(--rose-l);border-radius:8px;padding:5px 10px;font-size:12px;color:var(--rose);margin-bottom:4px">🚨 ฉุกเฉินส่ง: <strong>${p.emergHosp}</strong></div>`:''}
         ${(()=>{
           const appts=(p.appointments&&p.appointments.length)?p.appointments:(p.appointment?[{date:p.appointment,doctor:p.doctor||''}]:[]);
@@ -1392,9 +1430,15 @@ function rShift(p,sh,lg){
     h+=`</div>`;
   }
 
-  // FOOD
-  h+=`<div class="dvr"></div><div class="sl">🍽️ มื้ออาหาร</div>`;
-  const isFeed=(p.foods||[]).some(f=>f.includes('Feed')||f.includes('สาย'));
+  // FOOD — check if feed or normal (can override per shift)
+  const defaultFeed=(p.foods||[]).some(f=>f.includes('Feed')||f.includes('สาย'));
+  const foodMode=lg.foodMode||(defaultFeed?'feed':'normal');
+  h+=`<div class="dvr"></div><div class="sl">🍽️ มื้ออาหาร</div>
+  <div class="opts" style="margin-bottom:6px">
+    <button class="opt og ${foodMode==='normal'?'sel':''}" onclick="sFoodMode(${p.id},'${sh}','normal')">🍚 อาหารปกติ</button>
+    <button class="opt or ${foodMode==='feed'?'sel':''}" onclick="sFoodMode(${p.id},'${sh}','feed')">🔴 Feed (สายยาง)</button>
+  </div>`;
+  const isFeed=foodMode==='feed';
 
   if(isFeed){
     // Feed meals: 4 times per day split across shifts
@@ -1476,7 +1520,7 @@ function rShift(p,sh,lg){
   <div class="wound-box">
     <div style="font-size:12px;color:var(--rose);margin-bottom:5px">ติ๊กตำแหน่งที่พบแผล</div>
     <div class="wound-chips">
-      ${['หลัง','สะโพกซ้าย','สะโพกขวา','ส้นเท้าซ้าย','ส้นเท้าขวา','ข้อเท้าซ้าย','ข้อเท้าขวา','ศีรษะ','ไหล่ซ้าย','ไหล่ขวา','ข้อศอกซ้าย','ข้อศอกขวา','อื่นๆ'].map(w=>{
+      ${['หลัง','ก้น','สะโพกซ้าย','สะโพกขวา','ส้นเท้าซ้าย','ส้นเท้าขวา','ข้อเท้าซ้าย','ข้อเท้าขวา','ศีรษะ','ไหล่ซ้าย','ไหล่ขวา','ข้อศอกซ้าย','ข้อศอกขวา','อื่นๆ'].map(w=>{
         const wounds=lg.wounds||[];const sel=wounds.includes(w);
         return`<button class="wound-chip ${sel?'wsel':''}" onclick="tWound(${p.id},'${sh}','${w}')">${w}</button>`;
       }).join('')}
@@ -1495,6 +1539,7 @@ function sVit(pid,sh,f,v){const lg=eLog(pid,curDate,sh);if(!lg.v)lg.v={};lg.v[f]
 function sBath(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.bath=lg.bath===v?null:v;save();rPats();}
 function sFoodT(pid,sh,mk,ft){const lg=eLog(pid,curDate,sh);if(!lg.food)lg.food={};if(!lg.food[mk])lg.food[mk]={};lg.food[mk].type=lg.food[mk].type===ft?null:ft;save();rPats();}
 function sFoodD(pid,sh,mk,f,v){const lg=eLog(pid,curDate,sh);if(!lg.food)lg.food={};if(!lg.food[mk])lg.food[mk]={};lg.food[mk][f]=v;save();}
+function sFoodMode(pid,sh,mode){const lg=eLog(pid,curDate,sh);lg.foodMode=mode;save();rPats();}
 function sStoolDid(pid,sh,v){const lg=eLog(pid,curDate,sh);if(typeof lg.stool!=='object')lg.stool={};lg.stool.did=lg.stool.did===v?null:v;if(lg.stool.did!==true){lg.stool.count='';lg.stool.texture=null;lg.stool.color=null;}save();rPats();rWarn();}
 function sStoolF(pid,sh,f,v){const lg=eLog(pid,curDate,sh);if(typeof lg.stool!=='object')lg.stool={did:true};lg.stool[f]=lg.stool[f]===v?null:v;save();rPats();}
 function sUrine(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.urine=lg.urine===v?null:v;save();rPats();}
@@ -2276,13 +2321,12 @@ const FIVE_RIGHT=[
 
 function setHvSh(sh){
   hvSh=sh;
-  ['D','N'].forEach(s=>{
-    const b=document.getElementById('hv'+s);
-    if(b){b.className='ssb'+(s===sh?(s==='D'?' aD':' aN'):'');}
-  });
+  const bD=document.getElementById('hvD');
+  const bN=document.getElementById('hvN');
+  if(bD)bD.className='ssb'+(sh==='D'?' aD':'');
+  if(bN)bN.className='ssb'+(sh==='N'?' aN':'');
   rHandover();
 }
-
 function eHvLog(pid,sh){
   const date=getShiftDate(sh);
   if(!S.logs[pid])S.logs[pid]={};
