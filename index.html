@@ -887,6 +887,11 @@ function initFirebase(cfg){
     document.getElementById('fbStatusCard').style.display='block';
     document.getElementById('fbStatusDetail').textContent='Project: '+cfg.projectId+' | ซิงค์ทุกครั้งที่บันทึก';
     toast('เชื่อมต่อ Firebase สำเร็จ ☁️');
+    // โหลด PIN จาก Firebase
+    loadPINFromFirebase().then(()=>{
+      const pr=document.getElementById('pinReminder');
+      if(pr)pr.style.display=hasPIN()?'none':'block';
+    });
   }catch(err){
     toast('เกิดข้อผิดพลาด: '+err.message);
     showSyncStatus('❌ '+err.message);
@@ -2442,13 +2447,43 @@ function expCSV(){
 // ============================================================
 // PIN SYSTEM
 // ============================================================
-function getStoredPIN(){return localStorage.getItem(PIN_KEY)||'';}
+// ============================================================
+// PIN SYSTEM — เก็บใน Firebase (ถ้าเชื่อม) หรือ localStorage (fallback)
+// ============================================================
+let cachedPIN=''; // cache ใน memory หลังโหลดจาก Firebase
+
+async function loadPINFromFirebase(){
+  if(!db)return;
+  try{
+    const snap=await db.collection('nhConfig').doc('pin').get();
+    if(snap.exists&&snap.data().pin){
+      cachedPIN=snap.data().pin;
+      // sync to localStorage as backup
+      localStorage.setItem(PIN_KEY,cachedPIN);
+    }
+  }catch(e){}
+}
+
+function getStoredPIN(){
+  // ใช้ cached PIN ก่อน (โหลดจาก Firebase) ถ้าไม่มีค่อยดึง localStorage
+  return cachedPIN||localStorage.getItem(PIN_KEY)||'';
+}
 function hasPIN(){return !!getStoredPIN();}
+
+async function savePINToStorage(pin){
+  // บันทึกทั้ง localStorage และ Firebase
+  localStorage.setItem(PIN_KEY,pin);
+  cachedPIN=pin;
+  if(db){
+    try{await db.collection('nhConfig').doc('pin').set({pin:pin,updatedAt:new Date().toISOString()});}
+    catch(e){toast('⚠️ บันทึก PIN ใน Firebase ไม่ได้: '+e.message);}
+  }
+}
 
 // requireAdmin(callback) — if PIN set, show PIN modal; else run callback directly
 function requireAdmin(cb,desc){
-  if(!hasPIN()){cb();return;}  // no PIN set → anyone can do it
-  if(pinUnlocked){cb();return;} // already unlocked this session
+  if(!hasPIN()){cb();return;}
+  if(pinUnlocked){cb();return;}
   pinCallback=cb;
   pinInput='';
   document.getElementById('pinTitle').textContent='🔐 ใส่ PIN ผู้ดูแล';
@@ -2463,19 +2498,16 @@ function pinKey(k){
   else if(pinInput.length<6){pinInput+=k;}
   updatePinDots();
   document.getElementById('pinError').textContent='';
-  // auto-submit when 4+ digits
   if(pinInput.length>=4){
     const stored=getStoredPIN();
     if(pinInput===stored){
-      // correct!
       pinUnlocked=true;
       clearTimeout(pinTimer);
-      pinTimer=setTimeout(()=>{pinUnlocked=false;},15*60*1000); // lock after 15 min
+      pinTimer=setTimeout(()=>{pinUnlocked=false;},15*60*1000);
       cModal('moPIN');
       if(pinCallback){const cb=pinCallback;pinCallback=null;cb();}
       toast('✅ ยืนยันตัวตนแล้ว (15 นาที)');
     } else if(pinInput.length===6){
-      // wrong
       document.getElementById('pinError').textContent='❌ PIN ไม่ถูกต้อง';
       pinInput='';updatePinDots();
     }
@@ -2488,22 +2520,9 @@ function updatePinDots(){
   el.innerHTML=Array(6).fill(0).map((_,i)=>`<div style="width:14px;height:14px;border-radius:50%;background:${i<len?'var(--purple)':'var(--border)'}"></div>`).join('');
 }
 
-function maskPin(displayId,realId){
-  const el=document.getElementById(displayId);
-  const real=document.getElementById(realId);
-  if(!el||!real)return;
-  // extract only digits typed
-  const digits=el.value.replace(/[^0-9]/g,'');
-  real.value=digits;
-  // show dots
-  el.value='●'.repeat(digits.length);
-}
-
 function openPINSetup(){
-  // clear all fields before opening
   ['pinOld','pinNew','pinNew2'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   const err=document.getElementById('pinSetupErr');if(err)err.textContent='';
-  // hide "current PIN" field if no PIN set yet
   const oldField=document.getElementById('pinOld')?.closest('.fl');
   if(oldField)oldField.style.display=hasPIN()?'block':'none';
   document.getElementById('moPINSetup').classList.add('open');
@@ -2516,18 +2535,19 @@ function savePIN(){
     const np=String(document.getElementById('pinNew')?.value||'').trim();
     const np2=String(document.getElementById('pinNew2')?.value||'').trim();
     const err=document.getElementById('pinSetupErr');
-    // only check old PIN if one exists
     if(stored&&old!==stored){if(err)err.textContent='❌ PIN ปัจจุบันไม่ถูกต้อง';return;}
     if(np.length<4){if(err)err.textContent='❌ PIN ต้องมีอย่างน้อย 4 หลัก';return;}
     if(np!==np2){if(err)err.textContent='❌ PIN ไม่ตรงกัน';return;}
-    localStorage.setItem(PIN_KEY,np);
+    savePINToStorage(np).then(()=>{
+      if(db)toast('✅ ตั้งค่า PIN เรียบร้อย! (บันทึกใน Firebase ☁️)');
+      else toast('✅ ตั้งค่า PIN เรียบร้อย! (แนะนำให้เชื่อม Firebase เพื่อความปลอดภัย)');
+    });
     pinUnlocked=true;
     clearTimeout(pinTimer);
     pinTimer=setTimeout(()=>{pinUnlocked=false;},15*60*1000);
     cModal('moPINSetup');
     ['pinOld','pinNew','pinNew2'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
     if(err)err.textContent='';
-    toast('✅ ตั้งค่า PIN เรียบร้อย!');
   }catch(e){toast('Error: '+e.message);}
 }
 
