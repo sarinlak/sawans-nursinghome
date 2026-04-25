@@ -441,6 +441,9 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);min
     <button class="btn bol" onclick="document.getElementById('moFB').classList.add('open')" style="width:100%;justify-content:center;margin-bottom:8px;border-color:var(--green);color:var(--green)">
       ☁️ ตั้งค่า Firebase Sync (ข้ามเครื่อง)
     </button>
+    <button class="btn bol" onclick="openPINSetup()" style="width:100%;justify-content:center;margin-bottom:8px;border-color:var(--purple);color:var(--purple)">
+      🔐 ตั้งค่า PIN ผู้ดูแล
+    </button>
 
     <!-- Export data -->
     <button class="btn bgr" onclick="exportData()" style="margin-bottom:8px">
@@ -486,6 +489,54 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);min
 <div id="syncBar" style="display:none;background:#1A9A52;color:#fff;font-size:12px;padding:4px 12px;text-align:center;position:sticky;top:111px;z-index:96">
   ☁️ <span id="syncMsg">เชื่อมต่อ Firebase แล้ว — ข้อมูล sync อัตโนมัติ</span>
 </div>
+
+<!-- PIN MODAL -->
+<div class="overlay" id="moPIN">
+<div class="modal" style="max-height:80vh">
+  <div class="mh"></div>
+  <h3 id="pinTitle">🔐 ใส่ PIN ผู้ดูแล</h3>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:14px" id="pinDesc">ฟังก์ชันนี้สำหรับผู้ดูแลเท่านั้น</div>
+  <div style="display:flex;justify-content:center;gap:10px;margin-bottom:16px" id="pinDots"></div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:240px;margin:0 auto 16px">
+    <button onclick="pinKey('1')" style="height:52px;border-radius:11px;border:1.5px solid var(--border);background:#fff;font-size:20px;font-weight:600;cursor:pointer;font-family:'Kanit',sans-serif">1</button>
+    <button onclick="pinKey('2')" style="height:52px;border-radius:11px;border:1.5px solid var(--border);background:#fff;font-size:20px;font-weight:600;cursor:pointer;font-family:'Kanit',sans-serif">2</button>
+    <button onclick="pinKey('3')" style="height:52px;border-radius:11px;border:1.5px solid var(--border);background:#fff;font-size:20px;font-weight:600;cursor:pointer;font-family:'Kanit',sans-serif">3</button>
+    <button onclick="pinKey('4')" style="height:52px;border-radius:11px;border:1.5px solid var(--border);background:#fff;font-size:20px;font-weight:600;cursor:pointer;font-family:'Kanit',sans-serif">4</button>
+    <button onclick="pinKey('5')" style="height:52px;border-radius:11px;border:1.5px solid var(--border);background:#fff;font-size:20px;font-weight:600;cursor:pointer;font-family:'Kanit',sans-serif">5</button>
+    <button onclick="pinKey('6')" style="height:52px;border-radius:11px;border:1.5px solid var(--border);background:#fff;font-size:20px;font-weight:600;cursor:pointer;font-family:'Kanit',sans-serif">6</button>
+    <button onclick="pinKey('7')" style="height:52px;border-radius:11px;border:1.5px solid var(--border);background:#fff;font-size:20px;font-weight:600;cursor:pointer;font-family:'Kanit',sans-serif">7</button>
+    <button onclick="pinKey('8')" style="height:52px;border-radius:11px;border:1.5px solid var(--border);background:#fff;font-size:20px;font-weight:600;cursor:pointer;font-family:'Kanit',sans-serif">8</button>
+    <button onclick="pinKey('9')" style="height:52px;border-radius:11px;border:1.5px solid var(--border);background:#fff;font-size:20px;font-weight:600;cursor:pointer;font-family:'Kanit',sans-serif">9</button>
+    <button style="height:52px;border-radius:11px;border:none;background:transparent;cursor:default"></button>
+    <button onclick="pinKey('0')" style="height:52px;border-radius:11px;border:1.5px solid var(--border);background:#fff;font-size:20px;font-weight:600;cursor:pointer;font-family:'Kanit',sans-serif">0</button>
+    <button onclick="pinKey('⌫')" style="height:52px;border-radius:11px;border:1.5px solid var(--border);background:#fff;font-size:20px;cursor:pointer">⌫</button>
+  </div>
+  <div id="pinError" style="text-align:center;color:var(--rose);font-size:13px;min-height:20px;margin-bottom:8px"></div>
+  <button class="btn bol" onclick="cModal('moPIN')" style="width:100%;justify-content:center">ยกเลิก</button>
+</div></div>
+
+<!-- PIN SETUP MODAL -->
+<div class="overlay" id="moPINSetup">
+<div class="modal">
+  <div class="mh"></div>
+  <h3>🔐 ตั้งค่า PIN ผู้ดูแล</h3>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:12px">PIN ใช้ป้องกันการแก้ไขประวัติผู้สูงอายุ เช่น เพิ่ม/ลบ/แก้ไข ยา นัดแพทย์</div>
+  <div class="fl"><div class="fll">PIN ปัจจุบัน (ถ้ามี)</div>
+    <input class="fi" id="pinOld" type="number" inputmode="numeric" min="0" max="999999" placeholder="ว่างถ้ายังไม่ได้ตั้ง" autocomplete="off" style="letter-spacing:4px;font-size:18px">
+  </div>
+  <div class="fl"><div class="fll">PIN ใหม่ (4-6 หลัก)</div>
+    <input class="fi" id="pinNew" type="number" inputmode="numeric" min="0" max="999999" placeholder="เช่น 1234" autocomplete="off" style="letter-spacing:4px;font-size:18px">
+  </div>
+  <div class="fl"><div class="fll">ยืนยัน PIN ใหม่</div>
+    <input class="fi" id="pinNew2" type="number" inputmode="numeric" min="0" max="999999" placeholder="พิมพ์ซ้ำ" autocomplete="off" style="letter-spacing:4px;font-size:18px">
+  </div>
+  <div id="pinSetupErr" style="color:var(--rose);font-size:12px;min-height:18px;margin-bottom:8px"></div>
+  <div style="display:flex;gap:8px">
+    <button class="btn bol" style="flex:1;justify-content:center" onclick="cModal('moPINSetup')">ยกเลิก</button>
+    <button class="btn bpr" style="flex:2;justify-content:center" onclick="savePIN()">✅ บันทึก PIN</button>
+  </div>
+</div></div>
+
 <div class="overlay" id="moFB">
 <div class="modal">
   <div class="mh"></div>
@@ -670,6 +721,8 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);min
 // CONSTANTS & STATE
 // ============================================================
 const DK='sawanNH10';
+const PIN_KEY='sawanNH_pin';
+let pinInput='',pinCallback=null,pinUnlocked=false,pinTimer=null;
 const MEAL_TIMES=['ก่อนอาหารเช้า','หลังอาหารเช้า','ก่อนอาหารเที่ยง','หลังอาหารเที่ยง','ก่อนอาหารเย็น','หลังอาหารเย็น','ก่อนนอน'];
 const MEDS_D=['หลังอาหารเช้า','ก่อนอาหารเที่ยง','หลังอาหารเที่ยง','ก่อนอาหารเย็น'];
 const MEDS_N=['ก่อนอาหารเช้า','หลังอาหารเย็น','ก่อนนอน'];
@@ -1046,7 +1099,8 @@ function rApptAlerts(){
 // ============================================================
 // ADD / EDIT PATIENT
 // ============================================================
-function oAddP(){
+function oAddP(){requireAdmin(()=>_oAddP(),'เพิ่มผู้สูงอายุใหม่');}
+function _oAddP(){
   editPid=null;tmpMeds=[];tmpAppts=[];
   document.getElementById('moPTitle').textContent='➕ เพิ่มผู้สูงอายุ';
   ['pnam','page','proo','pdia','pEmergHosp'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
@@ -1056,7 +1110,8 @@ function oAddP(){
   renderMedEntries();renderApptEntries();
   document.getElementById('moP').classList.add('open');
 }
-function oEditP(pid){
+function oEditP(pid){requireAdmin(()=>_oEditP(pid),'แก้ไขข้อมูลผู้สูงอายุ');}
+function _oEditP(pid){
   editPid=pid;const p=S.patients.find(x=>x.id===pid);if(!p)return;
   document.getElementById('moPTitle').textContent='✏️ แก้ไขข้อมูล '+p.name;
   document.getElementById('pnam').value=p.name;
@@ -1170,7 +1225,8 @@ function setMedMethod(id,method,src){const arr=src==='tmp'?tmpMeds:reMedTmp;cons
 // ============================================================
 // RE-MED
 // ============================================================
-function openReMed(pid){
+function openReMed(pid){requireAdmin(()=>_openReMed(pid),'อัปเดตรายการยา');}
+function _openReMed(pid){
   reMedPid=pid;const p=S.patients.find(x=>x.id===pid);if(!p)return;
   document.getElementById('reMedTitle').textContent='💊 ใบยา / Re-med — '+p.name;
   document.getElementById('reMedDate').value=tday();
@@ -1656,7 +1712,7 @@ function rVSChart(pid,sh,lg){
 
   return '<div id="vs-chart-'+pid+'-'+sh+'" style="margin:6px 0">'+svgPart+tableHtml+'</div>';
 }
-function delP(pid){if(!confirm('ต้องการลบผู้สูงอายุนี้?'))return;S.patients=S.patients.filter(p=>p.id!==pid);delete S.logs[pid];if(S.supplyLogs)delete S.supplyLogs[pid];save();renderAll();toast('ลบเรียบร้อย');}
+function delP(pid){requireAdmin(()=>{if(!confirm('ต้องการลบผู้สูงอายุนี้?'))return;S.patients=S.patients.filter(p=>p.id!==pid);delete S.logs[pid];if(S.supplyLogs)delete S.supplyLogs[pid];save();renderAll();toast('ลบเรียบร้อย');},'ลบข้อมูลผู้สูงอายุ');}
 
 function uSum(){
   document.getElementById('st').textContent=S.patients.length;
@@ -1668,7 +1724,8 @@ function uSum(){
 // ============================================================
 // ADL
 // ============================================================
-function openADL(pid){adlTargetPid=pid;adlAnswers={};const p=S.patients.find(x=>x.id===pid);if(p?.adl?.answers)adlAnswers={...p.adl.answers};renderADLForm();document.getElementById('moADL').classList.add('open');}
+function openADL(pid){requireAdmin(()=>_openADL(pid),'ประเมิน ADL');}
+function _openADL(pid){adlTargetPid=pid;adlAnswers={};const p=S.patients.find(x=>x.id===pid);if(p?.adl?.answers)adlAnswers={...p.adl.answers};renderADLForm();document.getElementById('moADL').classList.add('open');}
 function renderADLForm(){
   document.getElementById('adlForm').innerHTML=ADL_QS.map(q=>{const sel=adlAnswers[q.id];return`<div class="adl-q"><div class="adl-q-title">${q.title}</div>${q.opts.map(opt=>`<div class="adl-opt" onclick="pickADL('${q.id}',${opt.score})"><div class="adl-radio ${sel===opt.score?'on':''}"></div><div class="adl-opt-text">${opt.text}</div><div class="adl-score-lbl">${opt.score} คะ</div></div>`).join('')}</div>`;}).join('');
   const total=Object.values(adlAnswers).reduce((a,b)=>a+b,0);
@@ -2227,7 +2284,98 @@ function expCSV(){
 }
 
 // ============================================================
-// EXPORT / IMPORT DATA (between shifts / devices)
+// PIN SYSTEM
+// ============================================================
+function getStoredPIN(){return localStorage.getItem(PIN_KEY)||'';}
+function hasPIN(){return !!getStoredPIN();}
+
+// requireAdmin(callback) — if PIN set, show PIN modal; else run callback directly
+function requireAdmin(cb,desc){
+  if(!hasPIN()){cb();return;}  // no PIN set → anyone can do it
+  if(pinUnlocked){cb();return;} // already unlocked this session
+  pinCallback=cb;
+  pinInput='';
+  document.getElementById('pinTitle').textContent='🔐 ใส่ PIN ผู้ดูแล';
+  document.getElementById('pinDesc').textContent=desc||'ฟังก์ชันนี้สำหรับผู้ดูแลเท่านั้น';
+  document.getElementById('pinError').textContent='';
+  updatePinDots();
+  document.getElementById('moPIN').classList.add('open');
+}
+
+function pinKey(k){
+  if(k==='⌫'){pinInput=pinInput.slice(0,-1);}
+  else if(pinInput.length<6){pinInput+=k;}
+  updatePinDots();
+  document.getElementById('pinError').textContent='';
+  // auto-submit when 4+ digits
+  if(pinInput.length>=4){
+    const stored=getStoredPIN();
+    if(pinInput===stored){
+      // correct!
+      pinUnlocked=true;
+      clearTimeout(pinTimer);
+      pinTimer=setTimeout(()=>{pinUnlocked=false;},15*60*1000); // lock after 15 min
+      cModal('moPIN');
+      if(pinCallback){const cb=pinCallback;pinCallback=null;cb();}
+      toast('✅ ยืนยันตัวตนแล้ว (15 นาที)');
+    } else if(pinInput.length===6){
+      // wrong
+      document.getElementById('pinError').textContent='❌ PIN ไม่ถูกต้อง';
+      pinInput='';updatePinDots();
+    }
+  }
+}
+
+function updatePinDots(){
+  const el=document.getElementById('pinDots');if(!el)return;
+  const len=pinInput.length;
+  el.innerHTML=Array(6).fill(0).map((_,i)=>`<div style="width:14px;height:14px;border-radius:50%;background:${i<len?'var(--purple)':'var(--border)'}"></div>`).join('');
+}
+
+function maskPin(displayId,realId){
+  const el=document.getElementById(displayId);
+  const real=document.getElementById(realId);
+  if(!el||!real)return;
+  // extract only digits typed
+  const digits=el.value.replace(/[^0-9]/g,'');
+  real.value=digits;
+  // show dots
+  el.value='●'.repeat(digits.length);
+}
+
+function openPINSetup(){
+  // clear all fields before opening
+  ['pinOld','pinNew','pinNew2'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  const err=document.getElementById('pinSetupErr');if(err)err.textContent='';
+  // hide "current PIN" field if no PIN set yet
+  const oldField=document.getElementById('pinOld')?.closest('.fl');
+  if(oldField)oldField.style.display=hasPIN()?'block':'none';
+  document.getElementById('moPINSetup').classList.add('open');
+}
+
+function savePIN(){
+  try{
+    const stored=getStoredPIN();
+    const old=String(document.getElementById('pinOld')?.value||'').trim();
+    const np=String(document.getElementById('pinNew')?.value||'').trim();
+    const np2=String(document.getElementById('pinNew2')?.value||'').trim();
+    const err=document.getElementById('pinSetupErr');
+    // only check old PIN if one exists
+    if(stored&&old!==stored){if(err)err.textContent='❌ PIN ปัจจุบันไม่ถูกต้อง';return;}
+    if(np.length<4){if(err)err.textContent='❌ PIN ต้องมีอย่างน้อย 4 หลัก';return;}
+    if(np!==np2){if(err)err.textContent='❌ PIN ไม่ตรงกัน';return;}
+    localStorage.setItem(PIN_KEY,np);
+    pinUnlocked=true;
+    clearTimeout(pinTimer);
+    pinTimer=setTimeout(()=>{pinUnlocked=false;},15*60*1000);
+    cModal('moPINSetup');
+    ['pinOld','pinNew','pinNew2'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+    if(err)err.textContent='';
+    toast('✅ ตั้งค่า PIN เรียบร้อย!');
+  }catch(e){toast('Error: '+e.message);}
+}
+
+// ============================================================
 // ============================================================
 function exportData(){
   const now=new Date();
