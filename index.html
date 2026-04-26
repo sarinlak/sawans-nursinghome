@@ -703,6 +703,7 @@ body{font-family:Sarabun,sans-serif;background:var(--bg);color:var(--text);min-h
 const DK='sawanNH10';
 const PIN_KEY='sawanNH_pin';
 let pinInput='',pinCallback=null,pinUnlocked=false,pinTimer=null;
+let cachedPIN=''; // ต้องอยู่ด้านบนก่อน getStoredPIN ใช้
 
 // รายการงานมาตรฐานทุกคน — ไม่ต้องเลือกเอง
 const DEFAULT_TASKS_D=[
@@ -1493,6 +1494,8 @@ function sStoolF(pid,sh,f,v){const lg=eLog(pid,curDate,sh);if(typeof lg.stool!==
 function sUrine(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.urine=lg.urine===v?null:v;save();rPats();}
 function sNote(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.note=v;save();}
 function sCaution(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.caution=v;save();}
+function sVSMain(pid,sh,field,val){const lg=eLog(pid,curDate,sh);if(!lg.v)lg.v={};lg.v[field]=val;save();}
+function sVSStatus(pid,sh,val){const lg=eLog(pid,curDate,sh);if(!lg.v)lg.v={};lg.v.status=lg.v.status===val?null:val;save();rPats();}
 function tWound(pid,sh,w){const lg=eLog(pid,curDate,sh);if(!lg.wounds)lg.wounds=[];const i=lg.wounds.indexOf(w);if(i>=0)lg.wounds.splice(i,1);else lg.wounds.push(w);save();rPats();}
 function sWoundNote(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.woundNote=v;save();}
 function toggleParrot(pid,sh){
@@ -2318,6 +2321,18 @@ function bSum(p,dayData){
 // PHOTOS — simplified: add directly, tick to select for export
 // ============================================================
 function uPhotoFilter(){}  // no-op, kept for compatibility
+function savePhotoTag(mode){
+  if(mode===null){cModal('moPhotoTag');return;}
+  // find selected patient
+  const sel=document.querySelector('#photoTagOptions .selB');
+  const pid=sel?sel.dataset.pid:photoTagPid;
+  if(photoTagIdx!==null&&S.photos[photoTagIdx]){
+    S.photos[photoTagIdx].pid=pid||null;
+    S.photos[photoTagIdx].type=photoTagType||'กิจกรรม';
+    save();rPhotos();
+  }
+  cModal('moPhotoTag');
+}
 
 function addPh(input){
   Array.from(input.files).forEach(file=>{
@@ -2618,7 +2633,6 @@ function expCSV(){
 // ============================================================
 // PIN SYSTEM — เก็บใน Firebase (ถ้าเชื่อม) หรือ localStorage (fallback)
 // ============================================================
-let cachedPIN=''; // cache ใน memory หลังโหลดจาก Firebase
 
 async function loadPINFromFirebase(){
   if(!db)return;
@@ -2786,6 +2800,20 @@ function importData(input){
 // HANDOVER PAGE
 // ============================================================
 let hvSh='D';
+
+function eHvLog(pid,sh){
+  const date=getShiftDate(sh);
+  if(!S.logs[pid])S.logs[pid]={};
+  if(!S.logs[pid][date])S.logs[pid][date]={D:{},N:{}};
+  if(!S.logs[pid][date][sh])S.logs[pid][date][sh]={};
+  const lg=S.logs[pid][date][sh];
+  if(!lg.hv)lg.hv={riskFall:{},riskPneumonia:{},riskUTI:{},sleep:{},fiveRight:{},io:{intake:'',output:''},shiftNote:''};
+  return lg.hv;
+}
+function gHvLog(pid,sh){
+  const date=getShiftDate(sh);
+  return((S.logs[pid]||{})[date]||{})[sh]?.hv||{riskFall:{},riskPneumonia:{},riskUTI:{},sleep:{},fiveRight:{},io:{intake:'',output:''},shiftNote:''};
+}
 
 const RISK_FALL=[
   'ยกไม้กั้นเตียง 2 ข้างตลอด',
@@ -3028,6 +3056,11 @@ function cModal(id){document.getElementById(id).classList.remove('open');}
 document.querySelectorAll('.overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
 function toast(msg){const t=document.getElementById('tst');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3200);}
 
+window.onerror=function(msg,src,line,col,err){
+  const t=document.getElementById('tst');
+  if(t){t.textContent='JS Error: '+msg+' (line '+line+')';t.style.background='#D03050';t.classList.add('show');setTimeout(()=>{t.classList.remove('show');t.style.background='';},8000);}
+  return false;
+};
 init();
 </script>
 </body>
