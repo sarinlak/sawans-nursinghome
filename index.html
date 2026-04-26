@@ -21,7 +21,7 @@
   --border:#CCDFF0;--shadow:0 2px 12px rgba(43,120,212,.08);--r:14px;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:80px;}
+body{font-family:Sarabun,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:80px;}
 
 .hdr{background:linear-gradient(135deg,#1A5CB8,#2A98C0);color:#fff;padding:13px 15px 10px;position:sticky;top:0;z-index:100;box-shadow:0 3px 14px rgba(26,92,184,.24);}
 .hdr-r{display:flex;align-items:center;justify-content:space-between;}
@@ -258,7 +258,12 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);min
 .pslot{aspect-ratio:1;border-radius:9px;border:2px dashed var(--border);background:var(--sky-l);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;font-size:22px;gap:3px;}
 .pslot span{font-size:11px;color:var(--muted);}
 
-/* handover */
+/* alerts */
+.alert-group{background:#fff;border-radius:11px;box-shadow:var(--shadow);border:1.5px solid var(--border);margin-bottom:10px;overflow:hidden;}
+.alert-title{font-size:13px;font-weight:700;padding:9px 13px;background:var(--bg);border-bottom:1px solid var(--border);}
+.alert-row{display:flex;align-items:flex-start;gap:8px;padding:8px 13px;border-bottom:1px solid var(--border);flex-wrap:wrap;}
+.alert-row:last-child{border-bottom:none;}
+.alert-name{font-size:13px;font-weight:600;color:var(--text);flex:1;}
 .hv-card{background:#fff;border-radius:12px;box-shadow:var(--shadow);border:1.5px solid var(--border);margin-bottom:10px;overflow:hidden;}
 .hv-head{display:flex;align-items:center;justify-content:space-between;padding:10px 13px;background:var(--bg);cursor:pointer;}
 .hv-name{font-size:14px;font-weight:600;color:var(--text);}
@@ -345,7 +350,7 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);min
   <button class="tab" onclick="sw('general',this)"><span class="ti">🧹</span>งานทั่วไป</button>
   <button class="tab" onclick="sw('supply',this)"><span class="ti">📦</span>เบิกของ</button>
   <button class="tab" onclick="sw('history',this)"><span class="ti">📅</span>ประวัติ</button>
-  <button class="tab" onclick="sw('handover',this)"><span class="ti">📋</span>ส่งเวร</button>
+  <button class="tab" onclick="sw('handover',this)"><span class="ti">🔔</span>แจ้งเตือน</button>
   <button class="tab" onclick="sw('activity',this)"><span class="ti">📷</span>กิจกรรม</button>
   <button class="tab" onclick="sw('export',this)"><span class="ti">📤</span>รายงาน</button>
 </div>
@@ -404,16 +409,12 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);min
   <div id="hList"><div class="empty"><div class="ei">📋</div>เลือกผู้สูงอายุเพื่อดูประวัติ</div></div>
 </div>
 
-<!-- HANDOVER PAGE -->
+<!-- ALERTS PAGE -->
 <div id="pg-handover" class="pg">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-    <div style="font-family:'Kanit',sans-serif;font-size:15px;font-weight:600">📋 ส่งเวร</div>
-    <div style="display:flex;gap:6px">
-      <button id="hvD" class="ssb aD" onclick="setHvSh('D')">☀️ เวร D</button>
-      <button id="hvN" class="ssb" onclick="setHvSh('N')">🌙 เวร N</button>
-    </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+    <div style="font-family:'Kanit',sans-serif;font-size:15px;font-weight:600">🔔 แจ้งเตือน & ส่งเวร</div>
+    <div style="font-size:11px;color:var(--muted)" id="hvDateLbl"></div>
   </div>
-  <div style="font-size:12px;color:var(--muted);margin-bottom:10px" id="hvDateLbl"></div>
   <div id="hvList"></div>
 </div>
 
@@ -740,12 +741,14 @@ const SUP_ITEMS=[
   {k:'glucerna', n:'Glucerna',     u:'กระป๋อง'},
   {k:'gloves',   n:'ถุงมือ',        u:'กล่อง'},
   {k:'wetTissue',n:'ทิชชูเปียก',   u:'ห่อ'},
+  {k:'syringe',  n:'ไซริงค์',       u:'อัน'},
   {k:'nss',      n:'NSS',          u:'ขวด'},
   {k:'sterile',  n:'Sterile Water',u:'ขวด'},
   {k:'nssSpray', n:'น้ำเกลือพ่นยา',u:'ขวด'},
   {k:'cannula',  n:'Cannula',      u:'อัน'},
   {k:'maskBag',  n:'Mask with bag',u:'อัน'},
   {k:'nebMask',  n:'Mask พ่นยา',   u:'อัน'},
+  {k:'other1',   n:'อื่นๆ',         u:''},
 ];
 const ADL_QS=[
   {id:'feeding',title:'1. Feeding (การรับประทานอาหาร)',opts:[
@@ -985,6 +988,7 @@ function gLog(pid,date,sh){
 function gSup(pid,date,k){return((S.supplyLogs||{})[pid]||{})[date]?.[k]||0;}
 function setSup(pid,date,k,v){if(!S.supplyLogs)S.supplyLogs={};if(!S.supplyLogs[pid])S.supplyLogs[pid]={};if(!S.supplyLogs[pid][date])S.supplyLogs[pid][date]={};S.supplyLogs[pid][date][k]=Math.max(0,v);save();}
 function adjSup(pid,k,d){setSup(pid,curDate,k,gSup(pid,curDate,k)+d);rSupplyPat();}
+function sSupOtherName(pid,name){if(!S.supplyLogs)S.supplyLogs={};if(!S.supplyLogs[pid])S.supplyLogs[pid]={};if(!S.supplyLogs[pid][curDate])S.supplyLogs[pid][curDate]={};S.supplyLogs[pid][curDate].other1Name=name;save();}
 function adjPamp(pid,sh,d){const lg=eLog(pid,curDate,sh);lg.pampers=Math.max(0,(lg.pampers||0)+d);save();rPats();rPampSummary();}
 
 function getMedsForShift(p,sh){
@@ -1115,19 +1119,30 @@ function rApptAlerts(){
 // ============================================================
 // ADD / EDIT PATIENT
 // ============================================================
-function oAddP(){requireAdmin(()=>_oAddP(),'เพิ่มผู้สูงอายุใหม่');}
+function oAddP(){
+  // ถ้า Firebase ยังไม่ได้เชื่อม หรือยังไม่ได้โหลด PIN → เปิดฟอร์มได้เลย
+  // (PIN ปลอดภัยหลัง Firebase เชื่อมแล้ว)
+  if(!db||!hasPIN()||pinUnlocked){_oAddP();return;}
+  requireAdmin(function(){_oAddP();},'เพิ่มผู้สูงอายุใหม่');
+}
 function _oAddP(){
   editPid=null;tmpMeds=[];tmpAppts=[];
   document.getElementById('moPTitle').textContent='➕ เพิ่มผู้สูงอายุ';
-  ['pnam','page','proo','pdia','pEmergHosp'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
-  document.getElementById('pAdmit').value=tday();
-  document.getElementById('pDob').value='';
-  document.getElementById('pNote').value='';
-  document.querySelectorAll('#moP .chip').forEach(c=>c.classList.remove('sel'));
-  renderMedEntries();renderApptEntries();
-  document.getElementById('moP').classList.add('open');
+  ['pnam','page','proo','pdia','pEmergHosp','pNote','pDob'].forEach(function(id){
+    const e=document.getElementById(id);if(e)e.value='';
+  });
+  const admitEl=document.getElementById('pAdmit');if(admitEl)admitEl.value=tday();
+  document.querySelectorAll('#moP .chip').forEach(function(c){c.classList.remove('sel');});
+  try{renderMedEntries();}catch(e){console.warn('renderMedEntries:',e);}
+  try{renderApptEntries();}catch(e){console.warn('renderApptEntries:',e);}
+  const modal=document.getElementById('moP');
+  if(modal)modal.classList.add('open');
+  else toast('❌ ไม่พบ modal เพิ่มผู้สูงอายุ');
 }
-function oEditP(pid){requireAdmin(()=>_oEditP(pid),'แก้ไขข้อมูลผู้สูงอายุ');}
+function oEditP(pid){
+  if(!db||!hasPIN()||pinUnlocked){_oEditP(pid);return;}
+  requireAdmin(function(){_oEditP(pid);},'แก้ไขข้อมูลผู้สูงอายุ');
+}
 function _oEditP(pid){
   editPid=pid;const p=S.patients.find(x=>x.id===pid);if(!p)return;
   document.getElementById('moPTitle').textContent='✏️ แก้ไขข้อมูล '+p.name;
@@ -1390,311 +1405,79 @@ function sortPatients(patients){
 
 function rPats(){
   const list=document.getElementById('pList');
-  if(!S.patients.length){list.innerHTML=`<div class="empty"><div class="ei">👴</div>ยังไม่มีข้อมูลผู้สูงอายุ<br><small>กด "เพิ่ม" เพื่อเริ่มต้น</small></div>`;return;}
-  list.innerHTML=sortPatients(S.patients).map(p=>{
-    const sh=aSh[p.id]||'D';const lg=gLog(p.id,curDate,sh);const isOpen=oC[p.id];
+  if(!S.patients.length){list.innerHTML='<div class="empty"><div class="ei">👴</div>ยังไม่มีข้อมูลผู้สูงอายุ<br><small>กด "เพิ่ม" เพื่อเริ่มต้น</small></div>';return;}
+  list.innerHTML=sortPatients(S.patients).map(function(p){
+    const sh=aSh[p.id]||'D';
+    const lg=gLog(p.id,curDate,sh);
+    const isOpen=oC[p.id]||false; // default ปิด
     const ini=p.name.replace(/คุณ|นาย|นาง|นางสาว/g,'').trim().charAt(0)||'?';
-    const tasks=sh==='D'?(p.tasksD?.length?p.tasksD:DEFAULT_TASKS_D):(p.tasksN?.length?p.tasksN:DEFAULT_TASKS_N);
+    const tasks=sh==='D'?(p.tasksD&&p.tasksD.length?p.tasksD:DEFAULT_TASKS_D):(p.tasksN&&p.tasksN.length?p.tasksN:DEFAULT_TASKS_N);
     const shMeds=getMedsForShift(p,sh);
-    const tDone=tasks.filter(t=>lg.tasks?.[t]).length;
-    const mDone=shMeds.reduce((a,med)=>a+med.meals.filter(meal=>lg.meds?.[medKey(med.name,meal)]).length,0);
-    const mTotal=shMeds.reduce((a,med)=>a+med.meals.length,0);
-    const total=tasks.length+mTotal,done=tDone+mDone;
+    const tDone=tasks.filter(function(t){return lg.tasks&&lg.tasks[t];}).length;
+    const mDone=shMeds.filter(function(m){return lg.meds&&lg.meds['sh_med||'+m.name];}).length;
+    const total=tasks.length+shMeds.length, done=tDone+mDone;
     const pct=total?Math.round(done/total*100):0;
     const R=13,C=2*Math.PI*R,O=C-(pct/100)*C;
     const nsd=countNoStool(p.id);
-    const wb=nsd>=5?`<span style="background:var(--orange);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:4px">⚠️${nsd}วัน</span>`:nsd>=3?`<span style="background:var(--gold-l);color:var(--gold);font-size:10px;padding:2px 7px;border-radius:10px;margin-left:4px">${nsd}วัน</span>`:'';
-    let adlDot='';if(p.adl?.score!==undefined){const lv=adlLevel(p.adl.score);adlDot=`<span class="adl-dot" style="background:${lv.dot};margin-left:4px" title="ADL ${p.adl.score}/20"></span>`;}
-    // appointment badge
+    const wb=nsd>=5?'<span style="background:var(--orange);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:4px">⚠️'+nsd+'วัน</span>':nsd>=3?'<span style="background:var(--gold-l);color:var(--gold);font-size:10px;padding:2px 7px;border-radius:10px;margin-left:4px">'+nsd+'วัน</span>':'';
+    let adlDot='';
+    if(p.adl&&p.adl.score!==undefined){const lv=adlLevel(p.adl.score);adlDot='<span class="adl-dot" style="background:'+lv.dot+';margin-left:4px"></span>';}
+    // appointment badges (≤7 days)
     let apptBadge='';
-    if(p.appointment){const diff=daysDiff(p.appointment,tday());if(diff<=7&&diff>=0)apptBadge=`<span style="background:var(--purple-l);color:var(--purple);font-size:10px;padding:2px 7px;border-radius:10px;margin-left:4px">${diff===0?'🏥นัดวันนี้':'🗓️'+diff+'วัน'}</span>`;}
-    return`<div class="card">
-      <div class="chead" onclick="tCard(${p.id})">
-        <div style="display:flex;align-items:center;gap:9px">
-          <div class="av">${ini}</div>
-          <div><div class="pn" style="display:flex;align-items:center;flex-wrap:wrap;gap:3px">${p.name}${adlDot}${wb}${apptBadge}</div>
-          ${p.patNote?`<div style="font-size:11px;background:var(--gold-l);color:var(--gold);border-radius:6px;padding:2px 8px;margin-top:2px;font-weight:600">📌 ${p.patNote}</div>`:''}
-          <div class="ps">${p.age?p.age+' ปี':''}${p.room?' • '+p.room:''}${p.diag?' | '+p.diag:''}</div></div>
-        </div>
-        <div style="display:flex;align-items:center;gap:7px">
-          <div class="ring"><svg width="33" height="33" viewBox="0 0 33 33"><circle class="rb" cx="16.5" cy="16.5" r="${R}"/><circle class="rf" cx="16.5" cy="16.5" r="${R}" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${O.toFixed(1)}"/></svg><div class="rp">${pct}%</div></div>
-          <span class="chv ${isOpen?'op':''}">▼</span>
-        </div>
-      </div>
-      <div id="cb-${p.id}" class="cbody ${isOpen?'':'h'}">
-        ${!isToday()?`<div class="back-badge">📅 กำลังบันทึกวัน ${fmtShort(curDate)}</div>`:''}
-        ${(()=>{
-          if(p.adl?.score===undefined)return`<div style="background:var(--rose-l);border:1px solid var(--rose);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--rose);margin-bottom:4px">⚠️ ยังไม่ได้ประเมิน ADL</div>`;
-          const lv=adlLevel(p.adl.score);
-          const daysSince=p.adl.date?daysDiff(tday(),p.adl.date):0;
-          const remind=daysSince>=90?`<div style="background:var(--gold-l);border:1px solid var(--gold);border-radius:8px;padding:5px 10px;font-size:12px;color:var(--gold);margin-top:3px">🔔 ครบ ${Math.floor(daysSince/30)} เดือนแล้ว — ถึงเวลาประเมิน ADL ใหม่!</div>`:'';
-          return`<div class="adl-score-bar"><span style="font-size:12px;font-weight:600">📋 Barthel ADL</span><span class="adl-badge ${lv.cls}" style="font-size:11px;padding:3px 9px">${lv.label} (${p.adl.score}/20)</span></div>${remind}`;
-        })()}
-        ${p.emergHosp?`<div style="background:var(--rose-l);border-radius:8px;padding:5px 10px;font-size:12px;color:var(--rose);margin-bottom:4px">🚨 ฉุกเฉินส่ง: <strong>${p.emergHosp}</strong></div>`:''}
-        ${(()=>{
-          const appts=(p.appointments&&p.appointments.length)?p.appointments:(p.appointment?[{date:p.appointment,doctor:p.doctor||''}]:[]);
-          return appts.map(a=>{
-            if(!a.date)return'';
-            const diff=daysDiff(a.date,tday());
-            const col=diff<0?'var(--rose)':diff<=7?'var(--purple)':'var(--muted)';
-            return`<div style="background:var(--purple-l);border-radius:8px;padding:5px 10px;font-size:12px;color:${col};margin-bottom:3px">🗓️ ${a.date}${diff>=0?' (อีก '+diff+' วัน)':' ⚠️ เกินกำหนด'}${a.doctor?' — '+a.doctor:''}</div>`;
-          }).join('');
-        })()}
-        <div class="ssel">
-          <button class="ssb ${sh==='D'?'aD':''}" onclick="sSh(${p.id},'D',event)">☀️ เวร D (8-16น.)</button>
-          <button class="ssb ${sh==='N'?'aN':''}" onclick="sSh(${p.id},'N',event)">🌙 เวร N (16-8น.)</button>
-        </div>
-        ${rShift(p,sh,lg)}
-        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;justify-content:flex-end">
-          <button class="btn bedit" onclick="openADL(${p.id})">📋 ADL</button>
-          <button class="btn bedit" onclick="openMedHist(${p.id})">📜 ใบยา</button>
-          <button class="btn bgreen-sm" onclick="openReMed(${p.id})">💊 Re-med</button>
-          <button class="btn bedit" onclick="oEditP(${p.id})">✏️ แก้ไข</button>
-          <button class="btn bol" style="color:var(--rose);border-color:var(--rose);font-size:12px" onclick="delP(${p.id})">🗑</button>
-        </div>
-      </div>
-    </div>`;
+    const appts=(p.appointments&&p.appointments.length)?p.appointments:(p.appointment?[{date:p.appointment,doctor:p.doctor||''}]:[]);
+    appts.forEach(function(a){if(!a.date)return;const diff=daysDiff(a.date,tday());if(diff>=0&&diff<=7)apptBadge+='<span style="background:var(--purple-l);color:var(--purple);font-size:10px;padding:2px 7px;border-radius:10px;margin-left:4px">'+(diff===0?'🏥นัดวันนี้':'🗓️'+diff+'วัน')+'</span>';});
+
+    // build card
+    const h='<div class="card">'
+      +'<div class="chead" onclick="tCard('+p.id+')">'
+        +'<div style="display:flex;align-items:center;gap:9px;flex:1;min-width:0">'
+          +'<div class="av">'+ini+'</div>'
+          +'<div style="flex:1;min-width:0">'
+            +'<div class="pn" style="display:flex;align-items:center;flex-wrap:wrap;gap:3px">'+p.name+adlDot+wb+apptBadge+'</div>'
+            +(p.patNote?'<div style="font-size:11px;color:var(--gold);font-weight:600;margin-top:1px">📌 '+p.patNote+'</div>':'')
+            +'<div class="ps">'+(p.room?p.room+' • ':'')+(p.diag||'')+'</div>'
+          +'</div>'
+          // shift selector inline (stop propagation so clicking D/N doesn't open card)
+          +'<div style="display:flex;gap:3px;margin-left:6px" onclick="event.stopPropagation()">'
+            +'<button class="ssb '+(sh==='D'?'aD':'')+'" style="padding:2px 10px;font-size:11px" data-pid="'+p.id+'" data-sh="D" onclick="sShEl(this,event)">D</button>'
+            +'<button class="ssb '+(sh==='N'?'aN':'')+'" style="padding:2px 10px;font-size:11px" data-pid="'+p.id+'" data-sh="N" onclick="sShEl(this,event)">N</button>'
+          +'</div>'
+        +'</div>'
+        +'<div style="display:flex;align-items:center;gap:7px;flex-shrink:0">'
+          +'<div class="ring"><svg width="33" height="33" viewBox="0 0 33 33"><circle class="rb" cx="16.5" cy="16.5" r="'+R+'"/><circle class="rf" cx="16.5" cy="16.5" r="'+R+'" stroke-dasharray="'+C.toFixed(1)+'" stroke-dashoffset="'+O.toFixed(1)+'"/></svg><div class="rp">'+pct+'%</div></div>'
+          +'<span class="chv '+(isOpen?'op':'')+'">▼</span>'
+        +'</div>'
+      +'</div>'
+      +'<div id="cb-'+p.id+'" class="cbody '+(isOpen?'':'h')+'">'
+        +(isOpen?(function(){try{return rShift(p,sh,lg);}catch(e){return '<div style="color:var(--rose);font-size:12px;padding:8px">เกิดข้อผิดพลาด: '+e.message+'</div>';}})():'')
+      +'</div>'
+    +'</div>';
+    return h;
   }).join('');
-  uSum();
 }
 
-function rShift(p,sh,lg){
-  let h='';const v=lg.v||{};
-  h+=`<div class="sh-hdr sh${sh}">${sh==='D'?'☀️ สัญญาณชีพ เวร D (รอบ 10.00น.)':'🌙 สัญญาณชีพ เวร N'}</div>
-  <div class="vg">
-    <div class="vb"><div class="vl">💉 ความดัน</div><input class="vi" placeholder="111/61" value="${v.bp||''}" onchange="sVit(${p.id},'${sh}','bp',this.value)"></div>
-    <div class="vb"><div class="vl">🌡️ อุณหภูมิ °C</div><input class="vi" placeholder="36.5" value="${v.temp||''}" onchange="sVit(${p.id},'${sh}','temp',this.value)"></div>
-    <div class="vb"><div class="vl">💓 HR bpm</div><input class="vi" placeholder="72" value="${v.hr||''}" onchange="sVit(${p.id},'${sh}','hr',this.value)"></div>
-    <div class="vb"><div class="vl">💨 RR /min</div><input class="vi" placeholder="20" value="${v.rr||''}" onchange="sVit(${p.id},'${sh}','rr',this.value)"></div>
-    <div class="vb"><div class="vl">🫁 O2sat %</div><input class="vi" placeholder="96" value="${v.o2||''}" onchange="sVit(${p.id},'${sh}','o2',this.value)"></div>
-    <div class="vb"><div class="vl">🩸 น้ำตาล</div><input class="vi" placeholder="100" value="${v.sugar||''}" onchange="sVit(${p.id},'${sh}','sugar',this.value)"></div>
-  </div>
-  <div class="sl">สถานะ</div>
-  <div class="stat-row">
-    ${['ปกติ','ต้องดูแล','เฝ้าระวัง','ส่งหมอ'].map(s=>`<button class="sb ${v.status===s?{ปกติ:'sok',ต้องดูแล:'swa',เฝ้าระวัง:'sca',ส่งหมอ:'sdo'}[s]:''}" onclick="sVit(${p.id},'${sh}','status','${s}')">${s}</button>`).join('')}
-  </div>`;
-
-  // PARROT TOGGLE — auto-show if any VS data exists
-  const hasVSData=VS_TIMES.some(t=>{const vsd=lg.vsData?.[t]||{};return vsd.bp||vsd.temp||vsd.hr||vsd.o2;});
-  h+=`<div class="dvr"></div>
-  <div class="parrot-toggle" onclick="toggleParrot(${p.id},'${sh}')">
-    <div class="parrot-lbl">🦜 ฟอร์มปรอท (V/S ทุก 4 ชั่วโมง)</div>
-    <div class="parrot-sw ${(lg.parrot||hasVSData)?'on':''}"></div>
-  </div>`;
-  if(lg.parrot||hasVSData){
-    // VS input table
-    h+=`<div style="overflow-x:auto;margin-bottom:8px">
-    <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:400px">
-      <thead>
-        <tr style="background:var(--sky-l)">
-          <th style="padding:5px 7px;text-align:left;border:1px solid var(--border);font-size:11px;color:var(--muted)">V/S</th>
-          ${VS_TIMES.map(t=>`<th style="padding:5px 4px;text-align:center;border:1px solid var(--border);color:var(--sky);font-size:11px">${t}</th>`).join('')}
-        </tr>
-      </thead>
-      <tbody>
-        ${[
-          {k:'bp',  l:'BP<br><span style="font-size:9px;color:var(--muted)">mmHg</span>',   ph:'120/80'},
-          {k:'temp',l:'T°C',   ph:'36.5'},
-          {k:'hr',  l:'HR<br><span style="font-size:9px;color:var(--muted)">bpm</span>',     ph:'72'},
-          {k:'rr',  l:'RR<br><span style="font-size:9px;color:var(--muted)">/min</span>',    ph:'20'},
-          {k:'o2',  l:'O2%',   ph:'96'},
-        ].map(row=>`<tr>
-          <td style="padding:4px 7px;border:1px solid var(--border);font-weight:600;background:var(--bg);white-space:nowrap">${row.l}</td>
-          ${VS_TIMES.map(t=>{
-            const vsd=lg.vsData?.[t]||{};
-            return`<td style="padding:2px;border:1px solid var(--border);text-align:center">
-              <input style="width:100%;border:none;background:transparent;font-family:'Sarabun',sans-serif;font-size:12px;text-align:center;outline:none;padding:2px" 
-                placeholder="${row.ph}" value="${vsd[row.k]||''}" 
-                onchange="sVS(${p.id},'${sh}','${t}','${row.k}',this.value)">
-            </td>`;
-          }).join('')}
-        </tr>`).join('')}
-      </tbody>
-    </table></div>
-    ${rVSChart(p.id,sh,lg)}`;
-  }
-
-  // TASKS
-  const tasks=sh==='D'?(p.tasksD?.length?p.tasksD:DEFAULT_TASKS_D):(p.tasksN?.length?p.tasksN:DEFAULT_TASKS_N);
-  if(tasks.length){h+=`<div class="dvr"></div><div class="sl">รายการดูแล</div>`;tasks.forEach(t=>{const done=lg.tasks?.[t]||false;h+=`<div class="ci"><div class="ck ${done?'on':''}" onclick="tTask(${p.id},'${sh}','${t.replace(/'/g,"\\'")}')"></div><div class="cl ${done?'done':''}">${t}</div></div>`;});}
-
-  // BATH
-  const hasBath=tasks.some(t=>t.includes('อาบน้ำ'));
-  if(hasBath){h+=`<div class="dvr"></div><div class="sl">🛁 วิธีอาบน้ำ</div><div class="opts">
-    <button class="opt og ${lg.bath==='อาบน้ำในห้องน้ำ'?'sel':''}" onclick="sBath(${p.id},'${sh}','อาบน้ำในห้องน้ำ')">🚿 อาบน้ำ</button>
-    <button class="opt og ${lg.bath==='อาบน้ำ+สระผม'?'sel':''}" onclick="sBath(${p.id},'${sh}','อาบน้ำ+สระผม')">🚿💆 อาบน้ำ+สระผม</button>
-    <button class="opt ob ${lg.bath==='เช็ดตัวบนเตียง'?'sel':''}" onclick="sBath(${p.id},'${sh}','เช็ดตัวบนเตียง')">🛏️ เช็ดตัวบนเตียง</button>
-  </div>`;}
-
-  // PHYSICAL THERAPY — เวร D เท่านั้น
-  if(sh==='D'){
-    const PT_ITEMS=['หมุนวงล้อ','ปั่นจักรยาน','ยกห่วง','ดึงรอก','นั่งรถเข็น','กระตุ้นนั่งข้างเตียง','เคาะปอด','ฝึกพูด'];
-    const ptDone=lg.pt||{};
-    h+=`<div class="dvr"></div><div class="sl">🏃 กายภาพบำบัด</div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
-      ${PT_ITEMS.map(item=>{
-        const sel=ptDone[item]||false;
-        return`<button class="food-btn ${sel?'fsel':''}" onclick="tPT(${p.id},'${sh}','${item}')">${item}</button>`;
-      }).join('')}
-    </div>
-    <div style="display:flex;align-items:center;gap:8px;background:var(--bg);border-radius:8px;padding:6px 10px;border:1px solid var(--border)">
-      <span style="font-size:12px;color:var(--muted);white-space:nowrap">🚶 เดินราวจับ</span>
-      <input type="number" min="0" max="100" placeholder="รอบ" value="${ptDone['เดินราวจับ']||''}" 
-        onchange="sPTRounds(${p.id},'${sh}',this.value)" 
-        style="width:70px;border:1.5px solid var(--border);border-radius:7px;padding:4px 8px;font-family:'Sarabun',sans-serif;font-size:14px;font-weight:600;text-align:center;outline:none;background:#fff">
-      <span style="font-size:12px;color:var(--muted)">รอบ</span>
-      ${ptDone['เดินราวจับ']?`<span style="font-size:11px;color:var(--green);font-weight:600">✅ ${ptDone['เดินราวจับ']} รอบ</span>`:''}
-    </div>`;
-  }
-
-  // ACTIVITIES — เวร D เท่านั้น
-  if(sh==='D'){
-    const ACT_ITEMS=['ระบายสี','วาดภาพ','ฟังเพลง','ดูทีวี/ข่าว/หนัง','ทำขนม'];
-    const actDone=lg.activities||{};
-    h+=`<div class="dvr"></div><div class="sl">🎨 กิจกรรมนันทนาการ</div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px">
-      ${ACT_ITEMS.map(item=>{
-        const sel=actDone[item]||false;
-        return`<button class="food-btn ${sel?'fsel':''}" onclick="tActivity(${p.id},'${sh}','${item}')">${item}</button>`;
-      }).join('')}
-    </div>`;
-  }
-  h+=`<div class="dvr"></div><div class="sl">👶 แพมเพิส (เวร ${sh})</div>
-  <div class="pamp-row"><div class="pamp-lbl">จำนวนที่ใช้</div><div class="pc"><button class="pb" onclick="adjPamp(${p.id},'${sh}',-1)">−</button><div class="pnum">${lg.pampers||0}</div><button class="pb" onclick="adjPamp(${p.id},'${sh}',1)">+</button></div><span style="font-size:12px;color:var(--purple)">ตัว</span></div>`;
-
-  // MEDS — ยาทั้งหมดของเวรนี้ แสดงจำนวนเม็ด ติ๊กช่องเดียวต่อ 1 ตัว
-  const shMeds=getMedsForShift(p,sh);
-  const prnMeds=getPRNMeds(p);
-  if(shMeds.length){
-    h+=`<div class="dvr"></div><div class="sl">💊 ยา — ตรวจนับและแจกยา</div>
-    <div style="background:var(--sky-l);border-radius:8px;padding:5px 10px;font-size:11px;color:var(--sky);margin-bottom:6px">พยาบาลจัดยาตามรายการ → บริบาลตรวจนับแล้วติ๊กว่าแจกครบ</div>`;
-    shMeds.forEach(med=>{
-      const key='sh_med||'+med.name;
-      const done=lg.meds?.[key]||false;
-      const mt=MED_METHODS.find(m=>m.k===med.method)||MED_METHODS[0];
-      const dayBadge=med.evenDays?'<span style="font-size:10px;background:#E6F9F7;color:var(--teal);padding:1px 6px;border-radius:10px;margin-left:3px">วันคู่</span>':(med.specificDays&&med.days&&med.days.length?'<span style="font-size:10px;background:var(--purple-l);color:var(--purple);padding:1px 6px;border-radius:10px;margin-left:3px">'+med.days.map(function(d){return getDowLabel(d);}).join(' ')+'</span>':'');
-      const eyeBadge=(med.method==='drop'&&med.eyeSide)?'<span style="font-size:10px;background:var(--sky-l);color:var(--sky);padding:1px 6px;border-radius:10px;margin-left:3px">👁️ '+med.eyeSide+'</span>':'';
-      const qpm=med.qtyPerMeal||{};
-      const mealQtyLines=med.meals.map(m=>{
-        const q=qpm[m]||med.qty||'';
-        return`<div style="font-size:11px;color:var(--muted);padding:1px 0">🕐 ${m}${q?` — <strong style="color:var(--sky)">${q} ${med.method==='drop'?'หยอด':med.method==='inject'||med.method==='insulin'?'ครั้ง':'เม็ด'}</strong>`:''}</div>`;
-      }).join('');
-      h+=`<div class="ci" style="padding:8px 0;align-items:flex-start">
-        <div class="ck ${done?'on':''}" onclick="tMedKey(${p.id},'${sh}','${key.replace(/'/g,"\\'")}')"></div>
-        <div style="flex:1">
-          <div class="cl ${done?'done':''}" style="font-weight:600">${med.name}${dayBadge}${eyeBadge}</div>
-          <div style="margin-top:3px">${mealQtyLines}</div>
-          <div style="margin-top:3px"><span class="med-badge ${mt.cls}">${mt.l}</span></div>
-        </div>
-        <span style="font-size:11px;font-weight:700;color:${done?'var(--green)':'var(--muted)'}">${done?'✅':'⬜'}</span>
-      </div>`;
-    });
-    h+=`</div>`;
-  }
-
-  // FOOD — check if feed or normal (can override per shift)
-  const defaultFeed=(p.foods||[]).some(f=>f.includes('Feed')||f.includes('สาย'));
-  const foodMode=lg.foodMode||(defaultFeed?'feed':'normal');
-  h+=`<div class="dvr"></div><div class="sl">🍽️ มื้ออาหาร</div>
-  <div class="opts" style="margin-bottom:6px">
-    <button class="opt og ${foodMode==='normal'?'sel':''}" onclick="sFoodMode(${p.id},'${sh}','normal')">🍚 อาหารปกติ</button>
-    <button class="opt or ${foodMode==='feed'?'sel':''}" onclick="sFoodMode(${p.id},'${sh}','feed')">🔴 Feed (สายยาง)</button>
-  </div>`;
-  const isFeed=foodMode==='feed';
-
-  if(isFeed){
-    // Feed meals: 4 times per day split across shifts
-    // D shift = 08:00, 12:00 | N shift = 16:00, 20:00
-    const feedMeals=sh==='D'
-      ?[{k:'feed08',l:'🕗 08:00'},{k:'feed12',l:'🕛 12:00'}]
-      :[{k:'feed16',l:'🕓 16:00'},{k:'feed20',l:'🕗 20:00'}];
-    feedMeals.forEach(meal=>{
-      const fd=lg.food?.[meal.k]||{};
-      h+=`<div class="fbox">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <div style="font-size:13px;font-weight:600">🔴 Feed ${meal.l}</div>
-          <input class="finp" placeholder="สูตรอาหาร เช่น Ensure Plus" value="${fd.formula||''}" 
-            onchange="sFoodD(${p.id},'${sh}','${meal.k}','formula',this.value)" 
-            style="max-width:160px;font-size:12px;border:1.5px solid var(--border);border-radius:7px;padding:4px 8px;background:#fff">
-        </div>
-        <div class="food-row">
-          <button class="food-btn ${fd.feedDone===true?'fsel':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','feedDone',${fd.feedDone===true?null:true})">✅ ให้ครบ</button>
-          <button class="food-btn ${fd.feedDone===false?'fsel2':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','feedDone',${fd.feedDone===false?null:false})">❌ ไม่ครบ</button>
-        </div>
-        ${fd.feedDone===false?`<input class="finp" placeholder="เหตุผล เช่น อาเจียน/ไม่ยอมรับ" value="${fd.feedNote||''}" onchange="sFoodD(${p.id},'${sh}','${meal.k}','feedNote',this.value)" style="margin-top:5px;width:100%">`:''}
-      </div>`;
-    });
+function tCard(id){
+  oC[id]=!oC[id];
+  if(oC[id]){
+    // lazy load content when opening
+    const p=S.patients.find(function(x){return x.id===id;});
+    const cb=document.getElementById('cb-'+id);
+    if(p&&cb&&!cb.innerHTML.trim()){
+      const sh=aSh[id]||'D';
+      const lg=gLog(p.id,curDate,sh);
+      try{cb.innerHTML=rShift(p,sh,lg);}catch(e){cb.innerHTML='<div style="color:var(--rose);font-size:12px;padding:8px">เกิดข้อผิดพลาด: '+e.message+'</div>';}
+    }
+    if(cb)cb.classList.remove('h');
   } else {
-    const meals=sh==='D'?[{k:'breakfast',l:'🌅 อาหารเช้า'},{k:'lunch',l:'☀️ อาหารเที่ยง'}]:[{k:'dinner',l:'🌙 อาหารเย็น'}];
-    meals.forEach(meal=>{
-      const fd=lg.food?.[meal.k]||{};const fo=(p.foods&&p.foods.length)?p.foods:['อาหารปกติ'];
-      h+=`<div class="fbox"><div style="font-size:12px;font-weight:600;margin-bottom:4px">${meal.l}</div>
-        <div class="opts">${fo.map(ft=>`<button class="opt oo ${fd.type===ft?'sel':''}" onclick="sFoodT(${p.id},'${sh}','${meal.k}','${ft.replace(/\'/g,"\\'")}')">${ft}</button>`).join('')}</div>
-        <div class="food-row">
-          <button class="food-btn ${fd.amount==='หมดถาด'?'fsel':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','amount','หมดถาด')">🍽️ หมดถาด</button>
-          <button class="food-btn ${fd.amount==='ครึ่งถาด'?'fsel2':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','amount','ครึ่งถาด')">🥄 ครึ่งถาด</button>
-          <button class="food-btn ${fd.amount==='น้อยกว่าครึ่ง'?'fsel2':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','amount','น้อยกว่าครึ่ง')">⬇️ น้อยกว่าครึ่ง</button>
-        </div>
-        <div class="food-row">
-          <button class="food-btn ${fd.selfFeed===true?'fsel':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','selfFeed',${fd.selfFeed===true?null:true})">🙋 ทานเอง</button>
-          <button class="food-btn ${fd.selfFeed===false?'fsel2':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','selfFeed',${fd.selfFeed===false?null:false})">👨‍⚕️ เจ้าหน้าที่ป้อน</button>
-        </div>
-        <div class="frow"><input class="finp" placeholder="รายละเอียดเพิ่มเติม" value="${fd.detail||''}" onchange="sFoodD(${p.id},'${sh}','${meal.k}','detail',this.value)"></div>
-      </div>`;
-    });
+    const cb=document.getElementById('cb-'+id);
+    if(cb)cb.classList.add('h');
   }
-
-  // STOOL
-  const stool=lg.stool||{did:null};const nsd=countNoStool(p.id);
-  h+=`<div class="dvr"></div><div class="sl">🚽 การขับถ่าย</div>`;
-  if(nsd>=5)h+=`<div class="no-stool-warn">⚠️ ไม่ถ่ายมา <strong>${nsd} วัน</strong> — ควรพิจารณายาระบาย!</div>`;
-  else if(nsd>=3)h+=`<div class="no-stool-info">ℹ️ ไม่ถ่ายมา ${nsd} วัน</div>`;
-  h+=`<div class="stool-box"><div class="stool-row"><div class="stool-lbl">อุจจาระ</div><div class="stool-opts">
-    <button class="sopt ${stool.did===true?'sg':''}" onclick="sStoolDid(${p.id},'${sh}',true)">✅ ถ่าย</button>
-    <button class="sopt ${stool.did===false?'sr':''}" onclick="sStoolDid(${p.id},'${sh}',false)">❌ ไม่ถ่าย</button>
-  </div></div>`;
-  if(stool.did===true){
-    h+=`<div class="stool-row"><div class="stool-lbl">จำนวนครั้ง</div><div class="stool-opts"><input class="stool-count" type="number" min="1" max="20" placeholder="0" value="${stool.count||''}" onchange="sStoolF(${p.id},'${sh}','count',this.value)"><span style="font-size:12px;color:var(--muted);padding-top:5px">ครั้ง</span></div></div>
-    <div class="stool-row"><div class="stool-lbl">ลักษณะ</div><div class="stool-opts">
-      <button class="sopt ${stool.texture==='ปกติ'?'sg':''}" onclick="sStoolF(${p.id},'${sh}','texture','ปกติ')">✅ ปกติ</button>
-      <button class="sopt ${stool.texture==='เหลว'?'sr':''}" onclick="sStoolF(${p.id},'${sh}','texture','เหลว')">💧 เหลว</button>
-      <button class="sopt ${stool.texture==='แข็ง'?'so':''}" onclick="sStoolF(${p.id},'${sh}','texture','แข็ง')">🪨 แข็ง</button>
-      <button class="sopt ${stool.texture==='มีมูก'?'sb':''}" onclick="sStoolF(${p.id},'${sh}','texture','มีมูก')">🔵 มีมูก</button>
-    </div></div>
-    <div class="stool-row"><div class="stool-lbl">สี</div><div class="stool-opts">
-      <button class="sopt ${stool.color==='น้ำตาล'?'sg':''}" onclick="sStoolF(${p.id},'${sh}','color','น้ำตาล')">🟤 น้ำตาล</button>
-      <button class="sopt ${stool.color==='เหลือง'?'so':''}" onclick="sStoolF(${p.id},'${sh}','color','เหลือง')">🟡 เหลือง</button>
-      <button class="sopt ${stool.color==='เขียว'?'sb':''}" onclick="sStoolF(${p.id},'${sh}','color','เขียว')">🟢 เขียว</button>
-      <button class="sopt ${stool.color==='ดำ'?'sr':''}" onclick="sStoolF(${p.id},'${sh}','color','ดำ')">⚫ ดำ</button>
-      <button class="sopt ${stool.color==='แดง/มีเลือด'?'sr':''}" onclick="sStoolF(${p.id},'${sh}','color','แดง/มีเลือด')">🔴 มีเลือด</button>
-    </div></div>`;
-  }
-  h+=`</div>
-  <div class="sl" style="margin-top:4px">🚿 ปัสสาวะ</div>
-  <div class="opts">
-    <button class="opt og ${lg.urine==='ออกดี'?'sel':''}" onclick="sUrine(${p.id},'${sh}','ออกดี')">✅ ออกดี</button>
-    <button class="opt ob ${lg.urine==='กระบอก'?'sel':''}" onclick="sUrine(${p.id},'${sh}','กระบอก')">🔵 ใส่กระบอก</button>
-    <button class="opt oo ${lg.urine==='แพมเพิส'?'sel':''}" onclick="sUrine(${p.id},'${sh}','แพมเพิส')">👶 แพมเพิส</button>
-  </div>
-  <div class="dvr"></div><div class="sl">📝 หมายเหตุ</div>
-  <textarea class="note" placeholder="บันทึกอาการ สิ่งผิดปกติ..." onchange="sNote(${p.id},'${sh}',this.value)">${lg.note||''}</textarea>
-  <div class="dvr"></div><div class="sl">🩹 แผล (ถ้ามี)</div>
-  <div class="wound-box">
-    <div style="font-size:12px;color:var(--rose);margin-bottom:5px">ติ๊กตำแหน่งที่พบแผล</div>
-    <div class="wound-chips">
-      ${['หลัง','ก้น','สะโพกซ้าย','สะโพกขวา','ส้นเท้าซ้าย','ส้นเท้าขวา','ข้อเท้าซ้าย','ข้อเท้าขวา','ศีรษะ','ไหล่ซ้าย','ไหล่ขวา','ข้อศอกซ้าย','ข้อศอกขวา','อื่นๆ'].map(w=>{
-        const wounds=lg.wounds||[];const sel=wounds.includes(w);
-        return`<button class="wound-chip ${sel?'wsel':''}" onclick="tWound(${p.id},'${sh}','${w}')">${w}</button>`;
-      }).join('')}
-    </div>
-    ${(lg.wounds||[]).length?`<input class="finp" placeholder="รายละเอียดแผล" value="${lg.woundNote||''}" onchange="sWoundNote(${p.id},'${sh}',this.value)" style="margin-top:6px;width:100%">`:''}
-  </div>`;
-  return h;
+  // update chevron only
+  const card=document.querySelector('[id="cb-'+id+'"]')?.closest('.card');
+  if(card){const chv=card.querySelector('.chv');if(chv)chv.className='chv '+(oC[id]?'op':'');}
 }
-
-// handlers
-function tCard(id){oC[id]=!oC[id];rPats();}
-function sSh(pid,sh,e){e.stopPropagation();aSh[pid]=sh;rPats();}
+function sSh(pid,sh,e){if(e)e.stopPropagation();aSh[pid]=sh;rPats();}
+function sShEl(el,e){if(e)e.stopPropagation();sSh(el.dataset.pid,el.dataset.sh,null);}
 function tTask(pid,sh,t){const lg=eLog(pid,curDate,sh);if(!lg.tasks)lg.tasks={};lg.tasks[t]=!lg.tasks[t];save();rPats();}
 function tMedKey(pid,sh,key){const lg=eLog(pid,curDate,sh);if(!lg.meds)lg.meds={};lg.meds[key]=!lg.meds[key];save();rPats();}
 function sVit(pid,sh,f,v){const lg=eLog(pid,curDate,sh);if(!lg.v)lg.v={};lg.v[f]=v;save();if(f==='status')rPats();}
@@ -1709,6 +1492,7 @@ function sStoolDid(pid,sh,v){const lg=eLog(pid,curDate,sh);if(typeof lg.stool!==
 function sStoolF(pid,sh,f,v){const lg=eLog(pid,curDate,sh);if(typeof lg.stool!=='object')lg.stool={did:true};lg.stool[f]=lg.stool[f]===v?null:v;save();rPats();}
 function sUrine(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.urine=lg.urine===v?null:v;save();rPats();}
 function sNote(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.note=v;save();}
+function sCaution(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.caution=v;save();}
 function tWound(pid,sh,w){const lg=eLog(pid,curDate,sh);if(!lg.wounds)lg.wounds=[];const i=lg.wounds.indexOf(w);if(i>=0)lg.wounds.splice(i,1);else lg.wounds.push(w);save();rPats();}
 function sWoundNote(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.woundNote=v;save();}
 function toggleParrot(pid,sh){
@@ -1739,8 +1523,240 @@ function toggleParrot(pid,sh){
       </div>`;
   }
 }
+// ============================================================
+// rShift — renders the full shift card body for a patient
+// ============================================================
+function rShift(p,sh,lg){
+  let h='';
+  const tasks=sh==='D'?(p.tasksD&&p.tasksD.length?p.tasksD:DEFAULT_TASKS_D):(p.tasksN&&p.tasksN.length?p.tasksN:DEFAULT_TASKS_N);
+
+  // ADL + emergency info
+  if(p.adl&&p.adl.score!==undefined){
+    const lv=adlLevel(p.adl.score);
+    const daysSince=p.adl.date?daysDiff(tday(),p.adl.date):0;
+    const remind=daysSince>=90?`<div style="background:var(--gold-l);border:1px solid var(--gold);border-radius:8px;padding:5px 10px;font-size:12px;color:var(--gold);margin-top:3px">🔔 ครบ ${Math.floor(daysSince/30)} เดือนแล้ว — ถึงเวลาประเมิน ADL ใหม่!</div>`:'';
+    h+=`<div class="adl-score-bar"><span style="font-size:12px;font-weight:600">📋 Barthel ADL</span><span class="adl-badge ${lv.cls}" style="font-size:11px;padding:3px 9px">${lv.label} (${p.adl.score}/20)</span></div>${remind}`;
+  } else {
+    h+=`<div style="background:var(--rose-l);border:1px solid var(--rose);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--rose);margin-bottom:4px">⚠️ ยังไม่ได้ประเมิน ADL</div>`;
+  }
+  if(p.emergHosp)h+=`<div style="background:var(--rose-l);border-radius:8px;padding:5px 10px;font-size:12px;color:var(--rose);margin-bottom:4px">🚨 ฉุกเฉินส่ง: <strong>${p.emergHosp}</strong></div>`;
+
+  // V/S main
+  h+=`<div class="dvr"></div><div class="sl">🩺 สัญญาณชีพ</div>
+  <div class="vs-grid">
+    ${[{k:'bp',l:'💉 BP',ph:'120/80'},{k:'temp',l:'🌡️ T°C',ph:'36.5'},{k:'hr',l:'💓 HR',ph:'72'},{k:'rr',l:'💨 RR',ph:'20'},{k:'o2',l:'🫁 O2%',ph:'98'},{k:'sugar',l:'🩸 น้ำตาล',ph:'100'}].map(f=>`
+    <div class="vb">
+      <div class="vbl">${f.l}</div>
+      <input class="vbi" placeholder="${f.ph}" value="${lg.v?.[f.k]||''}" onchange="sVSMain(${p.id},'${sh}','${f.k}',this.value)">
+    </div>`).join('')}
+  </div>
+  <div class="opts" style="margin-top:6px">
+    ${['ปกติ','ต้องดูแล','เฝ้าระวัง','ส่งหมอ'].map(s=>`<button class="opt o${s==='ปกติ'?'g':s==='ส่งหมอ'?'r':'o'} ${lg.v?.status===s?'sel':''}" onclick="sVSStatus(${p.id},'${sh}','${s}')">${s}</button>`).join('')}
+  </div>`;
+
+  // Parrot form
+  const VS_SHIFT_D=['10:00','14:00'];
+  const VS_SHIFT_N=['18:00','22:00','02:00','06:00'];
+  const myVSTimes=sh==='D'?VS_SHIFT_D:VS_SHIFT_N;
+  const parrotOn=lg.parrot||myVSTimes.some(t=>{const vsd=(lg.vsData||{})[t]||{};return vsd.bp||vsd.temp||vsd.hr||vsd.o2;});
+  h+=`<div class="dvr"></div>
+  <div class="parrot-toggle" onclick="toggleParrot(${p.id},'${sh}')">
+    <div class="parrot-lbl">🦜 ฟอร์มปรอท เวร ${sh} (${myVSTimes.join(', ')})</div>
+    <div class="parrot-sw ${parrotOn?'on':''}"></div>
+  </div>`;
+  if(parrotOn){
+    h+=`<div style="overflow-x:auto;margin-bottom:8px">
+    <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:280px">
+      <thead><tr style="background:var(--sky-l)">
+        <th style="padding:5px 7px;text-align:left;border:1px solid var(--border);font-size:11px">V/S</th>
+        ${myVSTimes.map(t=>`<th style="padding:5px 4px;text-align:center;border:1px solid var(--border);color:var(--sky);font-size:11px">${t}</th>`).join('')}
+      </tr></thead><tbody>
+        ${[{k:'bp',l:'BP',ph:'120/80'},{k:'temp',l:'T°C',ph:'36.5'},{k:'hr',l:'HR',ph:'72'},{k:'rr',l:'RR',ph:'20'},{k:'o2',l:'O2%',ph:'96'}].map(row=>`<tr>
+          <td style="padding:4px 7px;border:1px solid var(--border);font-weight:600;background:var(--bg);white-space:nowrap">${row.l}</td>
+          ${myVSTimes.map(t=>{const vsd=(lg.vsData||{})[t]||{};return`<td style="padding:2px;border:1px solid var(--border);text-align:center">
+            <input style="width:100%;border:none;background:transparent;font-size:12px;text-align:center;outline:none;padding:2px" placeholder="${row.ph}" value="${vsd[row.k]||''}" onchange="sVS(${p.id},'${sh}','${t}','${row.k}',this.value)">
+          </td>`;}).join('')}
+        </tr>`).join('')}
+      </tbody></table></div>
+    ${rVSChart(p.id,sh,lg)}`;
+  }
+
+  // Tasks
+  if(tasks.length){
+    h+=`<div class="dvr"></div><div class="sl">รายการดูแล</div>`;
+    tasks.forEach(t=>{const done=lg.tasks?.[t]||false;h+=`<div class="ci"><div class="ck ${done?'on':''}" onclick="tTask(${p.id},'${sh}','${t.replace(/'/g,"\\'")}')"></div><div class="cl ${done?'done':''}">${t}</div></div>`;});
+  }
+
+  // Bath
+  if(tasks.some(t=>t.includes('อาบน้ำ'))){
+    h+=`<div class="dvr"></div><div class="sl">🛁 วิธีอาบน้ำ</div><div class="opts">
+    <button class="opt og ${lg.bath==='อาบน้ำในห้องน้ำ'?'sel':''}" onclick="sBath(${p.id},'${sh}','อาบน้ำในห้องน้ำ')">🚿 อาบน้ำ</button>
+    <button class="opt og ${lg.bath==='อาบน้ำ+สระผม'?'sel':''}" onclick="sBath(${p.id},'${sh}','อาบน้ำ+สระผม')">🚿💆 อาบน้ำ+สระผม</button>
+    <button class="opt ob ${lg.bath==='เช็ดตัวบนเตียง'?'sel':''}" onclick="sBath(${p.id},'${sh}','เช็ดตัวบนเตียง')">🛏️ เช็ดตัวบนเตียง</button>
+    </div>`;
+  }
+
+  // PT + Activities (D shift)
+  if(sh==='D'){
+    const PT_ITEMS=['หมุนวงล้อ','ปั่นจักรยาน','ยกห่วง','ดึงรอก','นั่งรถเข็น','กระตุ้นนั่งข้างเตียง','เคาะปอด','ฝึกพูด'];
+    const ptDone=lg.pt||{};
+    h+=`<div class="dvr"></div><div class="sl">🏃 กายภาพบำบัด</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+      ${PT_ITEMS.map(item=>`<button class="food-btn ${ptDone[item]?'fsel':''}" onclick="tPT(${p.id},'${sh}','${item}')">${item}</button>`).join('')}
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;background:var(--bg);border-radius:8px;padding:6px 10px;border:1px solid var(--border)">
+      <span style="font-size:12px;color:var(--muted)">🚶 เดินราวจับ</span>
+      <input type="number" min="0" max="100" placeholder="รอบ" value="${ptDone['เดินราวจับ']||''}" onchange="sPTRounds(${p.id},'${sh}',this.value)" style="width:70px;border:1.5px solid var(--border);border-radius:7px;padding:4px 8px;font-size:14px;font-weight:600;text-align:center;outline:none">
+      <span style="font-size:12px;color:var(--muted)">รอบ</span>
+    </div>`;
+    const ACT_ITEMS=['ระบายสี','วาดภาพ','ฟังเพลง','ดูทีวี/ข่าว/หนัง','ทำขนม','ทำแผล'];
+    const actDone=lg.activities||{};
+    h+=`<div class="dvr"></div><div class="sl">🎨 กิจกรรมนันทนาการ</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">
+      ${ACT_ITEMS.map(item=>`<button class="food-btn ${actDone[item]?'fsel':''}" onclick="tActivity(${p.id},'${sh}','${item}')">${item}</button>`).join('')}
+    </div>`;
+  }
+
+  // Meds
+  const shMeds=getMedsForShift(p,sh);
+  const prnMeds=getPRNMeds(p);
+  if(shMeds.length){
+    h+=`<div class="dvr"></div><div class="sl">💊 ยา — ตรวจนับและแจกยา</div>
+    <div style="background:var(--sky-l);border-radius:8px;padding:5px 10px;font-size:11px;color:var(--sky);margin-bottom:6px">พยาบาลจัดยา → บริบาลตรวจนับแล้วติ๊กว่าแจกครบ</div>`;
+    shMeds.forEach(med=>{
+      const key='sh_med||'+med.name;
+      const done=lg.meds?.[key]||false;
+      const mt=MED_METHODS.find(m=>m.k===med.method)||MED_METHODS[0];
+      const qpm=med.qtyPerMeal||{};
+      const mealQtyLines=med.meals.map(m=>{const q=qpm[m]||med.qty||'';return`<div style="font-size:11px;color:var(--muted)">🕐 ${m}${q?` — <strong style="color:var(--sky)">${q} ${med.method==='drop'?'หยอด':med.method==='inject'||med.method==='insulin'?'ครั้ง':'เม็ด'}</strong>`:''}</div>`;}).join('');
+      const dayBadge=med.evenDays?'<span style="font-size:10px;background:#E6F9F7;color:var(--teal);padding:1px 6px;border-radius:10px;margin-left:3px">วันคู่</span>':(med.specificDays&&med.days&&med.days.length?'<span style="font-size:10px;background:var(--purple-l);color:var(--purple);padding:1px 6px;border-radius:10px;margin-left:3px">'+med.days.map(d=>getDowLabel(d)).join(' ')+'</span>':'');
+      const eyeBadge=(med.method==='drop'&&med.eyeSide)?'<span style="font-size:10px;background:var(--sky-l);color:var(--sky);padding:1px 6px;border-radius:10px;margin-left:3px">👁️ '+med.eyeSide+'</span>':'';
+      h+=`<div class="ci" style="padding:8px 0;align-items:flex-start">
+        <div class="ck ${done?'on':''}" onclick="tMedKey(${p.id},'${sh}','${key.replace(/'/g,"\\'")}')"></div>
+        <div style="flex:1">
+          <div class="cl ${done?'done':''}" style="font-weight:600">${med.name}${dayBadge}${eyeBadge}</div>
+          <div style="margin-top:3px">${mealQtyLines}</div>
+          <div style="margin-top:3px"><span class="med-badge ${mt.cls}">${mt.l}</span></div>
+        </div>
+        <span style="font-size:11px;font-weight:700;color:${done?'var(--green)':'var(--muted)'}">${done?'✅':'⬜'}</span>
+      </div>`;
+    });
+  }
+  if(prnMeds.length){
+    h+=`<div class="prn-box"><div class="prn-lbl">💊 ยาตามอาการ (PRN)</div>`;
+    prnMeds.forEach(med=>{
+      const key='prn||'+med.name;const done=lg.meds?.[key]||false;
+      const mt=MED_METHODS.find(m=>m.k===med.method)||MED_METHODS[0];
+      h+=`<div class="ci"><div class="ck ${done?'on':''}" onclick="tMedKey(${p.id},'${sh}','${key.replace(/'/g,"\\'")}')"></div>
+        <div style="flex:1"><div class="cl ${done?'done':''}">${med.name}</div><div style="font-size:11px;margin-top:2px">${med.qty?`<span style="background:var(--gold);color:#fff;font-weight:700;padding:1px 7px;border-radius:8px;margin-right:4px">${med.qty}</span>`:''}<span class="med-badge ${mt.cls}">${mt.l}</span></div></div>
+      </div>`;
+    });
+    h+=`</div>`;
+  }
+
+  // Food
+  const defaultFeed=(p.foods||[]).some(f=>f.includes('Feed')||f.includes('สาย'));
+  const foodMode=lg.foodMode||(defaultFeed?'feed':'normal');
+  const isFeed=foodMode==='feed';
+  h+=`<div class="dvr"></div><div class="sl">🍽️ มื้ออาหาร</div>
+  <div class="opts" style="margin-bottom:6px">
+    <button class="opt og ${foodMode==='normal'?'sel':''}" onclick="sFoodMode(${p.id},'${sh}','normal')">🍚 อาหารปกติ</button>
+    <button class="opt or ${isFeed?'sel':''}" onclick="sFoodMode(${p.id},'${sh}','feed')">🔴 Feed (สายยาง)</button>
+  </div>`;
+  if(isFeed){
+    const feedMeals=sh==='D'?[{k:'feed08',l:'🕗 08:00'},{k:'feed12',l:'🕛 12:00'}]:[{k:'feed16',l:'🕓 16:00'},{k:'feed20',l:'🕗 20:00'}];
+    feedMeals.forEach(meal=>{
+      const fd=(lg.food||{})[meal.k]||{};
+      h+=`<div class="fbox">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div style="font-size:13px;font-weight:600">🔴 Feed ${meal.l}</div>
+          <input class="finp" placeholder="สูตรอาหาร เช่น Ensure Plus" value="${fd.formula||''}" onchange="sFoodD(${p.id},'${sh}','${meal.k}','formula',this.value)" style="max-width:160px;font-size:12px;border:1.5px solid var(--border);border-radius:7px;padding:4px 8px">
+        </div>
+        <div class="food-row">
+          <button class="food-btn ${fd.feedDone===true?'fsel':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','feedDone',${fd.feedDone===true?null:true})">✅ ให้ครบ</button>
+          <button class="food-btn ${fd.feedDone===false?'fsel2':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','feedDone',${fd.feedDone===false?null:false})">❌ ไม่ครบ</button>
+        </div>
+        ${fd.feedDone===false?`<input class="finp" placeholder="เหตุผล เช่น อาเจียน" value="${fd.feedNote||''}" onchange="sFoodD(${p.id},'${sh}','${meal.k}','feedNote',this.value)" style="margin-top:5px;width:100%">`:''}
+      </div>`;
+    });
+  } else {
+    const meals=sh==='D'?[{k:'breakfast',l:'🌅 อาหารเช้า'},{k:'lunch',l:'☀️ อาหารเที่ยง'}]:[{k:'dinner',l:'🌙 อาหารเย็น'}];
+    meals.forEach(meal=>{
+      const fd=(lg.food||{})[meal.k]||{};
+      const fo=(p.foods&&p.foods.length)?p.foods:['อาหารปกติ'];
+      h+=`<div class="fbox"><div style="font-size:12px;font-weight:600;margin-bottom:4px">${meal.l}</div>
+        <div class="opts">${fo.map(ft=>`<button class="opt oo ${fd.type===ft?'sel':''}" onclick="sFoodT(${p.id},'${sh}','${meal.k}','${ft.replace(/'/g,"\\'")}')">${ft}</button>`).join('')}</div>
+        <div class="food-row">
+          <button class="food-btn ${fd.amount==='หมดถาด'?'fsel':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','amount','หมดถาด')">🍽️ หมดถาด</button>
+          <button class="food-btn ${fd.amount==='2 ถาด'?'fsel':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','amount','2 ถาด')">🍽️🍽️ 2 ถาด</button>
+          <button class="food-btn ${fd.amount==='ครึ่งถาด'?'fsel2':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','amount','ครึ่งถาด')">🥄 ครึ่งถาด</button>
+          <button class="food-btn ${fd.amount==='น้อยกว่าครึ่ง'?'fsel2':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','amount','น้อยกว่าครึ่ง')">⬇️ น้อยกว่าครึ่ง</button>
+        </div>
+        <div class="food-row">
+          <button class="food-btn ${fd.selfFeed===true?'fsel':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','selfFeed',${fd.selfFeed===true?null:true})">🙋 ทานเอง</button>
+          <button class="food-btn ${fd.selfFeed===false?'fsel2':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','selfFeed',${fd.selfFeed===false?null:false})">👨‍⚕️ เจ้าหน้าที่ป้อน</button>
+        </div>
+        <div class="frow"><input class="finp" placeholder="รายละเอียดเพิ่มเติม" value="${fd.detail||''}" onchange="sFoodD(${p.id},'${sh}','${meal.k}','detail',this.value)"></div>
+      </div>`;
+    });
+  }
+
+  // Pampers
+  h+=`<div class="dvr"></div><div class="sl">👶 แพมเพิส (เวร ${sh})</div>
+  <div class="pamp-row"><div class="pamp-lbl">จำนวนที่ใช้</div><div class="pc"><button class="pb" onclick="adjPamp(${p.id},'${sh}',-1)">−</button><div class="pnum">${lg.pampers||0}</div><button class="pb" onclick="adjPamp(${p.id},'${sh}',1)">+</button></div><span style="font-size:12px;color:var(--purple)">ตัว</span></div>`;
+
+  // Stool
+  const nsd=countNoStool(p.id);
+  h+=`<div class="dvr"></div><div class="sl">🚽 การขับถ่าย</div>`;
+  if(nsd>=3)h+=`<div style="background:var(--gold-l);border:1.5px solid var(--gold);border-radius:9px;padding:6px 11px;font-size:12px;color:var(--gold);font-weight:600;margin-bottom:6px">⚠️ ไม่ถ่ายมา ${nsd} วัน</div>`;
+  const st=lg.stool||{did:null};
+  h+=`<div class="sl" style="font-size:12px;color:var(--muted)">อุจจาระ</div>
+  <div class="opts">
+    <button class="opt og ${st.did===true?'sel':''}" onclick="sStoolDid(${p.id},'${sh}',true)">✅ ถ่าย</button>
+    <button class="opt or ${st.did===false?'sel':''}" onclick="sStoolDid(${p.id},'${sh}',false)">❌ ไม่ถ่าย</button>
+  </div>`;
+  if(st.did===true){
+    h+=`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">
+      ${['ปกติ','แข็ง','เหลว','มีเลือด','มีมูก'].map(v=>`<button class="food-btn ${st.texture===v?'fsel':''}" onclick="sStoolF(${p.id},'${sh}','texture','${v}')">${v}</button>`).join('')}
+    </div>`;
+  }
+
+  // Urine
+  h+=`<div class="sl" style="font-size:12px;color:var(--muted);margin-top:8px">ปัสสาวะ</div>
+  <div class="opts">
+    <button class="opt og ${lg.urine==='ออกดี'?'sel':''}" onclick="sUrine(${p.id},'${sh}','ออกดี')">✅ ออกดี</button>
+    <button class="opt ob ${lg.urine==='ใส่กระบอก'?'sel':''}" onclick="sUrine(${p.id},'${sh}','ใส่กระบอก')">💧 ใส่กระบอก</button>
+    <button class="opt og ${lg.urine==='แพมเพิส'?'sel':''}" onclick="sUrine(${p.id},'${sh}','แพมเพิส')">👶 แพมเพิส</button>
+  </div>`;
+
+  // Note
+  h+=`<div class="dvr"></div><div class="sl">📝 หมายเหตุ</div>
+  <textarea class="note" placeholder="บันทึกอาการ สิ่งผิดปกติ..." onchange="sNote(${p.id},'${sh}',this.value)">${lg.note||''}</textarea>`;
+
+  // Wounds
+  h+=`<div class="dvr"></div><div class="sl">🩹 แผล (ถ้ามี)</div>
+  <div class="wound-box">
+    <div style="font-size:12px;color:var(--rose);margin-bottom:5px">ติ๊กตำแหน่งที่พบแผล</div>
+    <div class="wound-chips">
+      ${['หลัง','ก้น','สะโพกซ้าย','สะโพกขวา','ส้นเท้าซ้าย','ส้นเท้าขวา','ข้อเท้าซ้าย','ข้อเท้าขวา','ศีรษะ','ไหล่ซ้าย','ไหล่ขวา','ข้อศอกซ้าย','ข้อศอกขวา','อื่นๆ'].map(w=>{
+        const wounds=lg.wounds||[];const sel=wounds.includes(w);
+        return`<button class="wound-chip ${sel?'wsel':''}" onclick="tWound(${p.id},'${sh}','${w}')">${w}</button>`;
+      }).join('')}
+    </div>
+    ${(lg.wounds||[]).length?`<input class="finp" placeholder="รายละเอียดแผล" value="${lg.woundNote||''}" onchange="sWoundNote(${p.id},'${sh}',this.value)" style="margin-top:6px;width:100%">`:''}
+  </div>`;
+
+  // ⚠️ ข้อควรระวัง — ขึ้นในหน้าแจ้งเตือนอัตโนมัติ
+  h+=`<div class="dvr"></div>
+  <div style="background:var(--orange-l,#FFF5E0);border:1.5px solid var(--orange,#E08030);border-radius:10px;padding:9px 12px;">
+    <div style="font-size:12px;font-weight:700;color:var(--orange,#E08030);margin-bottom:5px">⚠️ ข้อควรระวัง (ขึ้นหน้าแจ้งเตือนอัตโนมัติ)</div>
+    <textarea class="note" placeholder="เช่น: ระวังดึงสาย, ต้องผูกยึด, แพ้ยา, มีไข้สูงตลอดคืน..." style="border-color:var(--orange,#E08030);min-height:50px" onchange="sCaution(${p.id},'${sh}',this.value)">${lg.caution||''}</textarea>
+  </div>`;
+
+  return h;
+}
+
 function sVS(pid,sh,time,field,val){const lg=eLog(pid,curDate,sh);if(!lg.vsData)lg.vsData={};if(!lg.vsData[time])lg.vsData[time]={};lg.vsData[time][field]=val;save();
-  // re-render only the chart area
   const chartEl=document.getElementById(`vs-chart-${pid}-${sh}`);
   if(chartEl){const curLg=gLog(pid,curDate,sh);chartEl.outerHTML=rVSChart(pid,sh,curLg);}
 }
@@ -1920,7 +1936,11 @@ function rVSChart(pid,sh,lg){
   const tdLbl='<td style="padding:3px 7px;border:1px solid #CCDFF0;background:#F0F5FC;font-weight:600;white-space:nowrap">';
   const tableHtml='<div style="overflow-x:auto;margin-top:4px"><table style="width:100%;border-collapse:collapse;font-size:11px;min-width:320px">'
 
-function delP(pid){requireAdmin(()=>{if(!confirm('ต้องการลบผู้สูงอายุนี้?'))return;S.patients=S.patients.filter(p=>p.id!==pid);delete S.logs[pid];if(S.supplyLogs)delete S.supplyLogs[pid];save();renderAll();toast('ลบเรียบร้อย');},'ลบข้อมูลผู้สูงอายุ');}
+function delP(pid){
+  const doDelete=function(){if(!confirm('ต้องการลบผู้สูงอายุนี้?'))return;S.patients=S.patients.filter(p=>p.id!==pid);delete S.logs[pid];if(S.supplyLogs)delete S.supplyLogs[pid];save();renderAll();toast('ลบเรียบร้อย');};
+  if(!db||!hasPIN()||pinUnlocked){doDelete();return;}
+  requireAdmin(doDelete,'ลบข้อมูลผู้สูงอายุ');
+}
 
 function uSum(){
   document.getElementById('st').textContent=S.patients.length;
@@ -2026,8 +2046,10 @@ function rSupplyPat(){
         <div class="supply-grid">
           ${SUP_ITEMS.map(item=>{
             const q=gSup(p.id,curDate,item.k);
+            const isOther=item.k==='other1';
+            const otherName=(S.supplyLogs?.[p.id]?.[curDate]?.other1Name)||'';
             return`<div class="supply-item">
-              <div class="supply-name">${item.n}</div>
+              <div class="supply-name">${item.n}${isOther?`<input class="finp" placeholder="ระบุชื่อ" value="${otherName}" onchange="sSupOtherName(${p.id},this.value)" style="margin-top:2px;font-size:11px;width:90px">`:''}</div>
               <div class="supply-ctrl">
                 <button class="sup-btn" onclick="adjSup(${p.id},'${item.k}',-1)">−</button>
                 <div class="sup-num">${q}</div>
@@ -2412,8 +2434,9 @@ function buildRepText(){
       if(shMeds.length){
         const totalMed=shMeds.length;
         const doneMed=shMeds.filter(m=>lg.meds?.['sh_med||'+m.name]).length;
-        if(doneMed===totalMed&&totalMed>0)rep+=`💊 ยา: ให้ยาครบทุกมื้อแล้ว ✅\n`;
-        else if(doneMed>0)rep+=`💊 ยา: ให้ยาแล้ว ${doneMed}/${totalMed} มื้อ\n`;
+        if(totalMed>0){
+          if(doneMed===totalMed)rep+=`💊 ยา: ให้ยาครบแล้ว ✅\n`;
+        }
         else rep+=`💊 ยา: ยังไม่ได้ให้ยา ⬜\n`;
       }
       const isFeed=(p.foods||[]).some(f=>f.includes('Feed')||f.includes('สาย'));
@@ -2627,15 +2650,24 @@ async function savePINToStorage(pin){
 
 // requireAdmin(callback) — if PIN set, show PIN modal; else run callback directly
 function requireAdmin(cb,desc){
+  // ถ้ายังไม่ได้ตั้ง PIN หรือปลดล็อกแล้ว → ผ่านเลย
   if(!hasPIN()){cb();return;}
   if(pinUnlocked){cb();return;}
+  // มี PIN → ขอ PIN ก่อน
   pinCallback=cb;
   pinInput='';
-  document.getElementById('pinTitle').textContent='🔐 ใส่ PIN ผู้ดูแล';
-  document.getElementById('pinDesc').textContent=desc||'ฟังก์ชันนี้สำหรับผู้ดูแลเท่านั้น';
-  document.getElementById('pinError').textContent='';
+  const titleEl=document.getElementById('pinTitle');
+  const descEl=document.getElementById('pinDesc');
+  const errEl=document.getElementById('pinError');
+  if(titleEl)titleEl.textContent='🔐 ใส่ PIN ผู้ดูแล';
+  if(descEl)descEl.textContent=desc||'ฟังก์ชันนี้สำหรับผู้ดูแลเท่านั้น';
+  if(errEl)errEl.textContent='';
   updatePinDots();
-  document.getElementById('moPIN').classList.add('open');
+  const modal=document.getElementById('moPIN');
+  if(modal)modal.classList.add('open');
+  else{// modal ไม่มี → bypass
+    if(pinCallback){const c=pinCallback;pinCallback=null;c();}
+  }
 }
 
 function pinKey(k){
@@ -2788,273 +2820,209 @@ const FIVE_RIGHT=[
   'ถูกเวลา (Right Time)',
 ];
 
-function setHvSh(sh){
-  hvSh=sh;
-  const bD=document.getElementById('hvD');
-  const bN=document.getElementById('hvN');
-  if(bD)bD.className='ssb'+(sh==='D'?' aD':'');
-  if(bN)bN.className='ssb'+(sh==='N'?' aN':'');
-  rHandover();
-}
-function eHvLog(pid,sh){
-  const date=getShiftDate(sh);
-  if(!S.logs[pid])S.logs[pid]={};
-  if(!S.logs[pid][date])S.logs[pid][date]={D:{},N:{}};
-  if(!S.logs[pid][date][sh])S.logs[pid][date][sh]={};
-  const lg=S.logs[pid][date][sh];
-  if(!lg.hv)lg.hv={riskFall:{},riskPneumonia:{},riskUTI:{},sleep:{},fiveRight:{},io:{intake:'',output:''}};
-  return lg.hv;
-}
-function gHvLog(pid,sh){
-  const date=getShiftDate(sh);
-  return((S.logs[pid]||{})[date]||{})[sh]?.hv||{riskFall:{},riskPneumonia:{},riskUTI:{},sleep:{},fiveRight:{},io:{intake:'',output:''}};
-}
-function tHvItem(pid,sh,cat,key){
-  const hv=eHvLog(pid,sh);
-  if(!hv[cat])hv[cat]={};
-  hv[cat][key]=!hv[cat][key];
-  save();rHandover();
-}
-function sHvIO(pid,sh,field,val){
-  const hv=eHvLog(pid,sh);
-  if(!hv.io)hv.io={intake:'',output:''};
-  hv.io[field]=val;
-  save();
-  // update balance display
-  const inp=parseInt(hv.io.intake)||0,out=parseInt(hv.io.output)||0;
-  const bal=inp-out;
-  const el=document.getElementById('io-bal-'+pid+'-'+sh);
-  if(el){el.textContent=(bal>=0?'+':'')+bal+' ml';el.className='io-bal '+(bal>=0?'io-pos':'io-neg');}
-}
+// ============================================================
+// ALERTS / HANDOVER PAGE — แสดงภาพรวมทั้งวัน ไม่แยกเวร
+// ============================================================
 
 function rHandover(){
   const el=document.getElementById('hvList');
   const lbl=document.getElementById('hvDateLbl');
   if(!el)return;
-  const bD=document.getElementById('hvD');const bN=document.getElementById('hvN');
-  if(bD)bD.className='ssb'+(hvSh==='D'?' aD':'');
-  if(bN)bN.className='ssb'+(hvSh==='N'?' aN':'');
-  const shDate=getShiftDate(hvSh);
-  if(lbl)lbl.textContent=(hvSh==='D'?'☀️ เวร D (08:00–16:00)':'🌙 เวร N (16:00–08:00)')+' • '+fmtTH(shDate);
+  if(lbl)lbl.textContent=fmtTH(curDate);
 
-  // แสดงข้อมูลจาก localStorage ทันที ไม่รอ Firebase
   if(!S.patients||!S.patients.length){
-    el.innerHTML='<div class="empty"><div class="ei">📋</div>ยังไม่มีผู้สูงอายุ</div>';
+    el.innerHTML='<div class="empty"><div class="ei">🔔</div>ยังไม่มีผู้สูงอายุ</div>';
     return;
   }
-  el.innerHTML=sortPatients(S.patients).map(function(p){return rHvCard(p,hvSh,shDate);}).join('');
-}
 
-function rHvCard(p,sh,shDate){
-  const lg=gLog(p.id,shDate,sh);
-  const hv=gHvLog(p.id,sh);
-  const v=lg.v||{};
-  const isOpen=oC['hv_'+p.id];
-  const ini=p.name.replace(/คุณ|นาย|นาง|นางสาว/g,'').trim().charAt(0)||'?';
+  let html2='';
 
-  // Status color from V/S status
-  const statusColor={ปกติ:'var(--green)',ต้องดูแล:'var(--gold)',เฝ้าระวัง:'var(--orange)',ส่งหมอ:'var(--rose)'}[v.status]||'var(--muted)';
-
-  // ADL level color
-  const adlColor=p.adl?.score!==undefined?adlLevel(p.adl.score).dot:'var(--muted)';
-
-  // Quick summary line
-  const shMeds=getMedsForShift(p,sh);
-  const medDone=shMeds.filter(m=>lg.meds?.['sh_med||'+m.name]).length;
-  const medTotal=shMeds.length;
-  const isFeed=(lg.foodMode||((p.foods||[]).some(f=>f.includes('Feed')||f.includes('สาย'))?'feed':'normal'))==='feed';
-
-  return`<div class="hv-card">
-    <div class="hv-head" onclick="oC['hv_'+${p.id}]=!oC['hv_'+${p.id}];rHandover()">
-      <div style="display:flex;align-items:center;gap:9px">
-        <div class="av" style="background:${adlColor}">${ini}</div>
-        <div>
-          <div style="font-size:14px;font-weight:700">${p.name}${p.room?' <span style="font-size:11px;color:var(--muted)">(${p.room})</span>':''}</div>
-          ${p.patNote?`<div style="font-size:11px;color:var(--gold);font-weight:600">📌 ${p.patNote}</div>`:''}
-          <div style="font-size:11px;color:${statusColor};font-weight:600;margin-top:1px">${v.status||'ยังไม่บันทึก V/S'}</div>
-        </div>
-      </div>
-      <span class="chv ${isOpen?'op':''}">▼</span>
-    </div>
-    <div class="${isOpen?'hv-body':'hv-body h'}">
-      ${rHvSummary(p,sh,lg,hv,v,isFeed,shMeds,medDone,medTotal)}
-    </div>
-  </div>`;
-}
-
-function rHvSummary(p,sh,lg,hv,v,isFeed,shMeds,medDone,medTotal){
-  let h='';
-  const io=hv.io||{};
-  const inp=parseInt(io.intake)||0,out=parseInt(io.output)||0;
-  const bal=inp-out;
-
-  // === 1. สัญญาณชีพ ===
-  h+=`<div class="hv-sec"><div class="hv-sl">🩺 สัญญาณชีพ</div>`;
-  if(v.bp||v.temp||v.hr){
-    const statusColor={ปกติ:'var(--green)',ต้องดูแล:'var(--gold)',เฝ้าระวัง:'var(--orange)',ส่งหมอ:'var(--rose)'}[v.status]||'var(--muted)';
-    h+=`<div style="display:flex;flex-wrap:wrap;gap:6px;font-size:12px">
-      ${v.bp?`<span style="background:var(--bg);padding:3px 8px;border-radius:7px;border:1px solid var(--border)">💉 ${v.bp} mmHg</span>`:''}
-      ${v.temp?`<span style="background:var(--bg);padding:3px 8px;border-radius:7px;border:1px solid var(--border)">🌡️ ${v.temp}°C</span>`:''}
-      ${v.hr?`<span style="background:var(--bg);padding:3px 8px;border-radius:7px;border:1px solid var(--border)">💓 ${v.hr} bpm</span>`:''}
-      ${v.rr?`<span style="background:var(--bg);padding:3px 8px;border-radius:7px;border:1px solid var(--border)">💨 RR ${v.rr}/min</span>`:''}
-      ${v.o2?`<span style="background:var(--bg);padding:3px 8px;border-radius:7px;border:1px solid var(--border)">🫁 O2 ${v.o2}%</span>`:''}
-      ${v.status?`<span style="background:${{ปกติ:'var(--green-l)',ต้องดูแล:'var(--gold-l)',เฝ้าระวัง:'var(--orange-l)',ส่งหมอ:'var(--rose-l)'}[v.status]||'var(--bg)'};color:${{ปกติ:'var(--green)',ต้องดูแล:'var(--gold)',เฝ้าระวัง:'var(--orange)',ส่งหมอ:'var(--rose)'}[v.status]||'var(--muted)'};padding:3px 8px;border-radius:7px;font-weight:700">${v.status}</span>`:''}
-    </div>`;
-  } else {
-    h+=`<div style="font-size:12px;color:var(--rose)">⚠️ ยังไม่ได้บันทึก V/S</div>`;
-  }
-  h+=`</div>`;
-
-  // === 2. อาหาร ===
-  h+=`<div class="hv-sec"><div class="hv-sl">🍽️ อาหาร / โภชนาการ</div>`;
-  if(isFeed){
-    const feedMeals=sh==='D'?[{k:'feed08',l:'08:00'},{k:'feed12',l:'12:00'}]:[{k:'feed16',l:'16:00'},{k:'feed20',l:'20:00'}];
-    feedMeals.forEach(ml=>{
-      const fd=lg.food?.[ml.k]||{};
-      const formula=fd.formula?' ('+fd.formula+')':'';
-      const status=fd.feedDone===true?'✅ รับได้ครบ'+formula:fd.feedDone===false?'❌ รับไม่ครบ'+(fd.feedNote?' — '+fd.feedNote:'')+formula:'—';
-      h+=`<div class="hv-row"><span class="hv-lbl">Feed ${ml.l}</span><span class="hv-val">${status}</span></div>`;
+  // === 1. นัดพบแพทย์ใน 7 วัน ===
+  const apptAlerts=[];
+  sortPatients(S.patients).forEach(function(p){
+    const appts=(p.appointments&&p.appointments.length)?p.appointments:(p.appointment?[{date:p.appointment,doctor:p.doctor||''}]:[]);
+    appts.forEach(function(a){
+      if(!a.date)return;
+      const diff=daysDiff(a.date,tday());
+      if(diff>=0&&diff<=7)apptAlerts.push({p,a,diff});
+      else if(diff<0&&diff>=-3)apptAlerts.push({p,a,diff,overdue:true});
     });
-  } else {
-    const meals=sh==='D'?[{k:'breakfast',l:'เช้า'},{k:'lunch',l:'เที่ยง'}]:[{k:'dinner',l:'เย็น'}];
-    meals.forEach(ml=>{
-      const fd=lg.food?.[ml.k]||{};
-      if(fd.type||fd.amount||fd.selfFeed!==undefined){
-        const amt=fd.amount||'';
-        const feed=fd.selfFeed===true?'ทานเอง':fd.selfFeed===false?'เจ้าหน้าที่ป้อน':'';
-        h+=`<div class="hv-row"><span class="hv-lbl">อาหาร${ml.l}</span><span class="hv-val">${fd.type||''} ${amt} ${feed}</span></div>`;
-      } else {
-        h+=`<div class="hv-row"><span class="hv-lbl">อาหาร${ml.l}</span><span class="hv-val" style="color:var(--muted)">ยังไม่บันทึก</span></div>`;
-      }
-    });
-  }
-  h+=`</div>`;
-
-  // === 3. ยา ===
-  h+=`<div class="hv-sec"><div class="hv-sl">💊 ยาและจิตใจ (5 Right)</div>`;
-  const allMedDone=medDone===medTotal&&medTotal>0;
-  h+=`<div class="hv-row"><span class="hv-lbl">สถานะยา</span><span class="hv-val" style="color:${allMedDone?'var(--green)':medTotal===0?'var(--muted)':'var(--rose)'}">
-    ${medTotal===0?'ไม่มียา':allMedDone?'✅ ให้ยาครบ':'⚠️ ให้ยา '+medDone+'/'+medTotal+' ตัว'}</span></div>`;
-  // 5 Right
-  const rightDone=FIVE_RIGHT.filter(i=>hv.fiveRight?.[i]).length;
-  h+=`<div class="hv-row"><span class="hv-lbl">5 Right</span>
-    <span class="hv-val" style="color:${rightDone===5?'var(--green)':'var(--muted)'}">
-      ${rightDone===5?'✅ ครบ':rightDone+'/5'} — ${FIVE_RIGHT.filter(i=>hv.fiveRight?.[i]).map(i=>i.replace(/\(.*\)/,'')).join(', ')||'ยังไม่ติ๊ก'}
-    </span></div>`;
-  h+=`</div>`;
-
-  // === 4. ขับถ่าย + I/O ===
-  const st=stoolTxt(lg.stool);
-  h+=`<div class="hv-sec"><div class="hv-sl">🚽 ขับถ่าย & น้ำ</div>
-    <div class="hv-row"><span class="hv-lbl">อุจจาระ</span><span class="hv-val">${st||'ยังไม่บันทึก'}</span></div>
-    <div class="hv-row"><span class="hv-lbl">ปัสสาวะ</span><span class="hv-val">${lg.urine||'ยังไม่บันทึก'}</span></div>
-    ${io.intake||io.output?`<div class="hv-row"><span class="hv-lbl">I/O</span><span class="hv-val">เข้า ${io.intake||0} ml / ออก ${io.output||0} ml → Balance <span style="color:${bal>=0?'var(--sky)':'var(--rose)'};font-weight:700">${bal>=0?'+':''}${bal} ml</span></span></div>`:''}
-  </div>`;
-
-  // === 5. ป้องกันความเสี่ยง ===
-  const allFall=RISK_FALL.every(i=>hv.riskFall?.[i]);
-  const allPneum=RISK_PNEUMONIA.every(i=>hv.riskPneumonia?.[i]);
-  const allUTI=RISK_UTI.every(i=>hv.riskUTI?.[i]);
-  h+=`<div class="hv-sec"><div class="hv-sl">⚠️ ความเสี่ยง & ป้องกัน</div>
-    <div class="hv-row"><span class="hv-lbl">พลัดตกหกล้ม</span><span class="hv-val" style="color:${allFall?'var(--green)':'var(--muted)'}">
-      ${allFall?'✅ ดำเนินการครบ':RISK_FALL.filter(i=>hv.riskFall?.[i]).length+'/'+RISK_FALL.length}</span></div>
-    <div class="hv-row"><span class="hv-lbl">ปอดติดเชื้อ</span><span class="hv-val" style="color:${allPneum?'var(--green)':'var(--muted)'}">
-      ${allPneum?'✅ ดำเนินการครบ':RISK_PNEUMONIA.filter(i=>hv.riskPneumonia?.[i]).length+'/'+RISK_PNEUMONIA.length}</span></div>
-    <div class="hv-row"><span class="hv-lbl">ติดเชื้อปัสสาวะ</span><span class="hv-val" style="color:${allUTI?'var(--green)':'var(--muted)'}">
-      ${allUTI?'✅ ดำเนินการครบ':RISK_UTI.filter(i=>hv.riskUTI?.[i]).length+'/'+RISK_UTI.length}</span></div>
-  </div>`;
-
-  // === 6. นอนหลับ + ออกกำลังกาย ===
-  const sleepDone=SLEEP_ITEMS.filter(i=>hv.sleep?.[i]);
-  h+=`<div class="hv-sec"><div class="hv-sl">😴 นอนหลับ & ออกกำลังกาย</div>`;
-  if(sleepDone.length){
-    h+=`<div class="hv-row"><span class="hv-lbl">นอนหลับ</span><span class="hv-val">${sleepDone.join(', ')}</span></div>`;
-  } else {
-    h+=`<div class="hv-row"><span class="hv-lbl">นอนหลับ</span><span class="hv-val" style="color:var(--muted)">ยังไม่บันทึก</span></div>`;
-  }
-  if(sh==='D'){
-    const ptDone=lg.pt||{};
-    const PT_ALL=['หมุนวงล้อ','ปั่นจักรยาน','ยกห่วง','ดึงรอก','นั่งรถเข็น','กระตุ้นนั่งข้างเตียง','เคาะปอด','ฝึกพูด'];
-    const doneList=PT_ALL.filter(i=>ptDone[i]);
-    if(ptDone['เดินราวจับ'])doneList.push('เดินราวจับ '+ptDone['เดินราวจับ']+' รอบ');
-    h+=`<div class="hv-row"><span class="hv-lbl">กายภาพ</span><span class="hv-val">${doneList.length?doneList.join(', '):'<span style="color:var(--muted)">ยังไม่บันทึก</span>'}</span></div>`;
-    const actDone=lg.activities||{};
-    const doneAct=Object.keys(actDone).filter(k=>actDone[k]);
-    if(doneAct.length)h+=`<div class="hv-row"><span class="hv-lbl">กิจกรรม</span><span class="hv-val">${doneAct.join(', ')}</span></div>`;
-  }
-  h+=`</div>`;
-
-  // === 7. แผล ===
-  if((lg.wounds||[]).length){
-    h+=`<div class="hv-sec"><div class="hv-sl">🩹 แผลกดทับ</div>
-      <div class="hv-row"><span class="hv-lbl">ตำแหน่ง</span><span class="hv-val" style="color:var(--rose)">${lg.wounds.join(', ')}</span></div>
-      ${lg.woundNote?`<div class="hv-row"><span class="hv-lbl">การดูแล</span><span class="hv-val">${lg.woundNote}</span></div>`:''}
-    </div>`;
-  }
-
-  // === 8. หมายเหตุ ===
-  if(lg.note){
-    h+=`<div class="hv-sec"><div class="hv-sl">📝 ปัญหา / สังเกตการณ์</div>
-      <div style="background:var(--gold-l);border-radius:8px;padding:7px 10px;font-size:13px;color:var(--text);line-height:1.6;border:1px solid var(--gold)">${lg.note}</div>
-    </div>`;
-  }
-
-  // === Checklist interactive (collapsed section) ===
-  const chkOpen=oC['hvck_'+p.id];
-  h+=`<div style="margin-top:8px">
-    <button onclick="oC['hvck_'+${p.id}]=!oC['hvck_'+${p.id}];rHandover()" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;width:100%">
-      ${chkOpen?'▲ ซ่อน Checklist':'▼ เปิด Checklist ส่งเวร (บันทึกเพิ่มเติม)'}
-    </button>
-    ${chkOpen?rHvChecklist(p,sh,hv):''}
-  </div>`;
-
-  return h;
-}
-
-function rHvChecklist(p,sh,hv){
-  let h='<div style="margin-top:8px">';
-  // I/O inputs
-  const io=hv.io||{};
-  h+=`<div class="hv-sec" style="margin-top:8px"><div class="hv-sl">💧 Intake / Output <span style="font-size:10px;font-weight:400">(ไม่บังคับ)</span></div>
-    <div class="io-row"><span class="io-lbl">Intake</span><input class="io-inp" type="number" placeholder="ml" value="${io.intake||''}" onchange="sHvIO(${p.id},'${sh}','intake',this.value)"><span class="io-unit">ml</span></div>
-    <div class="io-row"><span class="io-lbl">Output</span><input class="io-inp" type="number" placeholder="ml" value="${io.output||''}" onchange="sHvIO(${p.id},'${sh}','output',this.value)"><span class="io-unit">ml</span></div>
-  </div>`;
-  // Risk checklists
-  const risks=[
-    {cat:'riskFall',title:'⚠️ ป้องกันพลัดตกหกล้ม',items:RISK_FALL,color:'var(--orange)'},
-    {cat:'riskPneumonia',title:'🫁 ป้องกันปอดติดเชื้อ',items:RISK_PNEUMONIA,color:'var(--sky)'},
-    {cat:'riskUTI',title:'💧 ป้องกันติดเชื้อทางเดินปัสสาวะ',items:RISK_UTI,color:'var(--teal)'},
-  ];
-  risks.forEach(risk=>{
-    h+=`<div class="risk-box" style="margin-bottom:6px;border-color:${risk.color}">
-      <div class="risk-title" style="color:${risk.color}">${risk.title}</div>
-      ${risk.items.map(item=>{
-        const done=hv[risk.cat]?.[item]||false;
-        return`<div class="risk-item"><div class="risk-ck ${done?'on':''}" onclick="tHvItem(${p.id},'${sh}','${risk.cat}','${item.replace(/'/g,"\\'")}')"></div><span>${item}</span></div>`;
-      }).join('')}
-    </div>`;
   });
-  // Sleep
-  h+=`<div class="risk-box" style="margin-bottom:6px;border-color:var(--purple)">
-    <div class="risk-title" style="color:var(--purple)">😴 การนอนหลับ</div>
-    ${SLEEP_ITEMS.map(item=>{
-      const done=hv.sleep?.[item]||false;
-      return`<div class="risk-item"><div class="risk-ck ${done?'on':''}" onclick="tHvItem(${p.id},'${sh}','sleep','${item.replace(/'/g,"\\'")}')"></div><span>${item}</span></div>`;
-    }).join('')}
-  </div>`;
-  // 5 Right
-  h+=`<div class="risk-box" style="margin-bottom:6px;border-color:var(--green)">
-    <div class="risk-title" style="color:var(--green)">💊 5 Right</div>
-    ${FIVE_RIGHT.map(item=>{
-      const done=hv.fiveRight?.[item]||false;
-      return`<div class="risk-item"><div class="risk-ck ${done?'on':''}" onclick="tHvItem(${p.id},'${sh}','fiveRight','${item.replace(/'/g,"\\'")}')"></div><span>${item}</span></div>`;
-    }).join('')}
-  </div>`;
-  h+=`</div>`;
-  return h;
+  if(apptAlerts.length){
+    html2+='<div class="alert-group"><div class="alert-title">🗓️ นัดพบแพทย์ (ภายใน 7 วัน)</div>';
+    apptAlerts.forEach(function(item){
+      const col=item.overdue?'var(--rose)':item.diff===0?'var(--orange)':'var(--purple)';
+      html2+='<div class="alert-row" style="border-left:3px solid '+col+'">'
+        +'<span class="alert-name">'+item.p.name+(item.p.room?' ('+item.p.room+')':'')+'</span>'
+        +'<span style="font-size:12px;color:'+col+';font-weight:600">'
+        +(item.overdue?'⚠️ เกิน '+Math.abs(item.diff)+' วัน':item.diff===0?'🏥 วันนี้':'🗓️ อีก '+item.diff+' วัน')+'</span>'
+        +(item.a.doctor?'<span style="font-size:11px;color:var(--muted)"> — '+item.a.doctor+'</span>':'')
+        +'</div>';
+    });
+    html2+='</div>';
+  }
+
+  // === 2. ไม่ถ่าย ≥ 3 วัน (รวมทั้งสองเวร) ===
+  const stoolAlerts=[];
+  sortPatients(S.patients).forEach(function(p){
+    const n=countNoStool(p.id);
+    if(n>=3)stoolAlerts.push({p,n});
+  });
+  if(stoolAlerts.length){
+    html2+='<div class="alert-group"><div class="alert-title">🚽 ไม่ถ่าย ≥ 3 วัน</div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
+      +'<tr style="background:var(--bg)">'
+      +'<th style="padding:5px 8px;border:1px solid var(--border);text-align:left">เตียง / ชื่อ</th>'
+      +'<th style="padding:5px 8px;border:1px solid var(--border);text-align:center">ไม่ถ่าย</th>'
+      +'<th style="padding:5px 8px;border:1px solid var(--border);text-align:center">ยาระบาย D</th>'
+      +'<th style="padding:5px 8px;border:1px solid var(--border);text-align:center">ยาระบาย N</th>'
+      +'</tr>';
+    stoolAlerts.forEach(function(item){
+      const lgD=gLog(item.p.id,curDate,'D');
+      const lgN=gLog(item.p.id,getShiftDate('N'),'N');
+      const laxD=lgD.laxativeGiven||false;
+      const laxN=lgN.laxativeGiven||false;
+      const col=item.n>=5?'var(--rose)':'var(--orange)';
+      html2+='<tr>'
+        +'<td style="padding:5px 8px;border:1px solid var(--border);font-weight:600;color:'+col+'">'+item.p.name+(item.p.room?' ('+item.p.room+')':'')+'</td>'
+        +'<td style="padding:5px 8px;border:1px solid var(--border);text-align:center;color:'+col+';font-weight:700">'+item.n+' วัน</td>'
+        +'<td style="padding:5px 8px;border:1px solid var(--border);text-align:center"><div class="risk-ck '+(laxD?'on':'')+' tLaxBtn" data-pid="'+item.p.id+'" data-sh="D" data-date="'+curDate+'" onclick="tLaxEl(this)" style="margin:auto"></div></td>'
+        +'<td style="padding:5px 8px;border:1px solid var(--border);text-align:center"><div class="risk-ck '+(laxN?'on':'')+' tLaxBtn" data-pid="'+item.p.id+'" data-sh="N" data-date="'+getShiftDate('N')+'" onclick="tLaxEl(this)" style="margin:auto"></div></td>'
+        +'</tr>';
+    });
+    html2+='</table></div>';
+  }
+
+  // === 3. Feed อาหารไม่ได้ (ทั้ง D และ N) ===
+  const feedAlerts=[];
+  sortPatients(S.patients).forEach(function(p){
+    const isFeed=(p.foods||[]).some(function(f){return f.includes('Feed')||f.includes('สาย');});
+    if(!isFeed)return;
+    const failItems=[];
+    // D shift feeds
+    const lgD=gLog(p.id,curDate,'D');
+    [{k:'feed08',l:'08:00'},{k:'feed12',l:'12:00'}].forEach(function(m){
+      const fd=(lgD.food||{})[m.k]||{};
+      if(fd.feedDone===false)failItems.push({time:m.l,note:fd.feedNote||'',sh:'D'});
+    });
+    // N shift feeds
+    const lgN=gLog(p.id,getShiftDate('N'),'N');
+    [{k:'feed16',l:'16:00'},{k:'feed20',l:'20:00'}].forEach(function(m){
+      const fd=(lgN.food||{})[m.k]||{};
+      if(fd.feedDone===false)failItems.push({time:m.l,note:fd.feedNote||'',sh:'N'});
+    });
+    if(failItems.length)feedAlerts.push({p,failItems});
+  });
+  if(feedAlerts.length){
+    html2+='<div class="alert-group"><div class="alert-title">🔴 Feed อาหารไม่ได้</div>';
+    feedAlerts.forEach(function(item){
+      html2+='<div class="alert-row" style="border-left:3px solid var(--rose)">'
+        +'<div style="flex:1"><span class="alert-name">'+item.p.name+(item.p.room?' ('+item.p.room+')':'')+'</span>'
+        +item.failItems.map(function(fi){
+          return'<div style="font-size:11px;color:var(--rose);margin-top:2px">'
+            +'เวร '+fi.sh+' '+fi.time+': ❌'+(fi.note?' — '+fi.note:'')+'</div>';
+        }).join('')+'</div></div>';
+    });
+    html2+='</div>';
+  }
+
+  // === 4. ฟอร์มปรอท (เตือนเตียงที่เปิด parrot) ===
+  const parrotList=[];
+  sortPatients(S.patients).forEach(function(p){
+    const lgD=gLog(p.id,curDate,'D');
+    const lgN=gLog(p.id,curDate,'N');
+    if(lgD.parrot||lgN.parrot)parrotList.push(p);
+  });
+  if(parrotList.length){
+    html2+='<div class="alert-group"><div class="alert-title">🦜 ต้องวัด V/S ทุก 4 ชั่วโมง</div>';
+    parrotList.forEach(function(p){
+      html2+='<div class="alert-row" style="border-left:3px solid var(--sky)">'
+        +'<div style="flex:1"><span class="alert-name">'+p.name+(p.room?' ('+p.room+')':'')+'</span>'
+        +'<div style="font-size:11px;color:var(--sky)">เวร D: 10:00, 14:00 &nbsp;|&nbsp; เวร N: 18:00, 22:00, 02:00, 06:00</div>'
+        +'</div></div>';
+    });
+    html2+='</div>';
+  }
+
+  // === 5. แผลกดทับ (รวมทั้ง D และ N) ===
+  const woundAlerts=[];
+  sortPatients(S.patients).forEach(function(p){
+    const wounds=new Set();let note='';
+    ['D','N'].forEach(function(sh){
+      const lgD=gLog(p.id,sh==='D'?curDate:getShiftDate('N'),sh);
+      (lgD.wounds||[]).forEach(function(w){wounds.add(w);});
+      if(lgD.woundNote)note=lgD.woundNote;
+    });
+    if(wounds.size)woundAlerts.push({p,wounds:Array.from(wounds),note});
+  });
+  if(woundAlerts.length){
+    html2+='<div class="alert-group"><div class="alert-title">🩹 แผลกดทับ</div>';
+    woundAlerts.forEach(function(item){
+      html2+='<div class="alert-row" style="border-left:3px solid var(--rose)">'
+        +'<div style="flex:1"><span class="alert-name">'+item.p.name+(item.p.room?' ('+item.p.room+')':'')+'</span>'
+        +'<div style="font-size:11px;color:var(--rose);margin-top:2px">ตำแหน่ง: '+item.wounds.join(', ')+(item.note?' — '+item.note:'')+'</div>'
+        +'</div></div>';
+    });
+    html2+='</div>';
+  }
+
+  // === 6. ข้อควรระวัง ===
+  const cautionAlerts=[];
+  sortPatients(S.patients).forEach(function(p){
+    const items=[];
+    ['D','N'].forEach(function(sh){
+      const date=sh==='D'?curDate:getShiftDate('N');
+      const lg=gLog(p.id,date,sh);
+      if(lg.caution&&lg.caution.trim())items.push({sh:sh,caution:lg.caution.trim()});
+    });
+    if(items.length)cautionAlerts.push({p:p,items:items});
+  });
+  if(cautionAlerts.length){
+    html2+='<div class="alert-group"><div class="alert-title" style="color:#E08030">⚠️ ข้อควรระวัง</div>';
+    cautionAlerts.forEach(function(item){
+      html2+='<div class="alert-row" style="border-left:3px solid #E08030"><div style="flex:1"><span class="alert-name">'+item.p.name+(item.p.room?' ('+item.p.room+')':'')+'</span>'
+        +item.items.map(function(c){return'<div style="font-size:12px;background:#FFF5E0;border-radius:6px;padding:3px 8px;margin-top:3px;color:#8B4000">'+(c.sh==='D'?'☀️':'🌙')+' '+c.caution+'</div>';}).join('')
+        +'</div></div>';
+    });
+    html2+='</div>';
+  }
+
+  // === 7. บันทึก / ส่งเวร ===
+  html2+='<div class="alert-group"><div class="alert-title">📝 บันทึก / ส่งเวร รายคน</div>';
+  sortPatients(S.patients).forEach(function(p){
+    const lgD=gLog(p.id,curDate,'D');
+    const lgN=gLog(p.id,getShiftDate('N'),'N');
+    const hvD=gHvLog(p.id,'D'); const hvN=gHvLog(p.id,'N');
+    html2+='<div style="background:#fff;border-radius:9px;border:1px solid var(--border);padding:9px 12px;margin-bottom:6px">'
+      +'<div style="font-weight:600;font-size:13px;margin-bottom:4px">'+p.name+(p.room?' <span style="font-size:11px;color:var(--muted)">('+p.room+')</span>':'')+(p.patNote?'<span style="font-size:11px;background:var(--gold-l);color:var(--gold);padding:1px 7px;border-radius:8px;margin-left:6px">📌 '+p.patNote+'</span>':'')+'</div>'
+      +(lgD.note?'<div style="font-size:11px;color:var(--sky);margin-bottom:2px">☀️ D: '+lgD.note+'</div>':'')
+      +(lgN.note?'<div style="font-size:11px;color:var(--purple);margin-bottom:2px">🌙 N: '+lgN.note+'</div>':'')
+      +((lgD.caution||lgN.caution)?'<div style="font-size:11px;background:#FFF5E0;border-radius:6px;padding:3px 8px;margin-bottom:4px;color:#8B4000">⚠️ '+(lgD.caution||lgN.caution)+'</div>':'')
+      +'<div style="display:flex;gap:6px;margin-top:4px">'
+      +'<div style="flex:1"><div style="font-size:10px;color:var(--muted);margin-bottom:2px">📨 ส่งเวร D</div><textarea style="width:100%;border:1px solid var(--border);border-radius:7px;padding:5px 7px;font-family:Sarabun,sans-serif;font-size:12px;resize:vertical;min-height:44px;outline:none" placeholder="บันทึกส่งเวร D..." data-pid="'+p.id+'" data-sh="D" onchange="sHvNoteEl(this)">'+( hvD.shiftNote||'')+'</textarea></div>'
+      +'<div style="flex:1"><div style="font-size:10px;color:var(--muted);margin-bottom:2px">📨 ส่งเวร N</div><textarea style="width:100%;border:1px solid var(--border);border-radius:7px;padding:5px 7px;font-family:Sarabun,sans-serif;font-size:12px;resize:vertical;min-height:44px;outline:none" placeholder="บันทึกส่งเวร N..." data-pid="'+p.id+'" data-sh="N" onchange="sHvNoteEl(this)">'+( hvN.shiftNote||'')+'</textarea></div>'
+      +'</div></div>';
+  });
+  html2+='</div>';
+
+  if(!apptAlerts.length&&!stoolAlerts.length&&!feedAlerts.length&&!parrotList.length&&!woundAlerts.length&&!cautionAlerts.length){
+    const noAlert='<div style="background:var(--green-l);border:1px solid var(--green);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--green);font-weight:600;margin-bottom:10px">✅ ไม่มีการแจ้งเตือนพิเศษวันนี้</div>';
+    html2=noAlert+html2.slice(html2.indexOf('<div class="alert-group">'));
+  }
+
+  el.innerHTML=html2;
 }
 
-function rHvBody(p,sh,lg,hv,v){return '';} // kept for compatibility
+function tLaxEl(el){tLaxative(el.dataset.pid,el.dataset.sh,el.dataset.date);}
+function tLaxative(pid,sh,date){const lg=eLog(pid,date,sh);lg.laxativeGiven=!lg.laxativeGiven;save();rHandover();}
+function sHvNoteEl(el){sHvNote(el.dataset.pid,el.dataset.sh,el.value);}
+function sHvNote(pid,sh,val){const hv=eHvLog(pid,sh);hv.shiftNote=val;save();}
+// stubs
+function setHvSh(){}
+function rHvCard(){return'';}
+function rHvSummary(){return'';}
+function rHvChecklist(){return'';}
+function rHvBody(){return'';}
 
 function cModal(id){document.getElementById(id).classList.remove('open');}
 document.querySelectorAll('.overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
