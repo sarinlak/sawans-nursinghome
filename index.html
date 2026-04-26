@@ -1508,6 +1508,13 @@ function tMedKey(pid,sh,key){const lg=eLog(pid,curDate,sh);if(!lg.meds)lg.meds={
   const cb=document.getElementById('cb-'+pid);
   if(cb&&!cb.classList.contains('h')){const p=S.patients.find(x=>x.id===pid);if(p)cb.innerHTML=rShift(p,sh,eLog(pid,curDate,sh));}
 }
+function tMedMealEl(el){
+  const pid=el.dataset.pid;
+  const sh=el.dataset.sh;
+  const allDone=el.dataset.done==='true';
+  const medNames=el.dataset.meds.split('|').filter(Boolean);
+  tMedMeal(pid,sh,medNames,allDone);
+}
 function tMedMeal(pid,sh,medNames,allDone){
   const lg=eLog(pid,curDate,sh);if(!lg.meds)lg.meds={};
   medNames.forEach(function(name){lg.meds['sh_med||'+name]=!allDone;});
@@ -1671,7 +1678,10 @@ function rShift(p,sh,lg){
         return`<span style="margin-right:10px;font-size:12px">${med.name}${q?` <strong style="color:var(--sky)">${q}${unit}</strong>`:''}${eye}</span>`;
       }).join('');
       h+=`<div class="ci" style="align-items:center;background:${allDone?'var(--green-l)':'#fff'};border-radius:10px;padding:9px 12px;margin-bottom:6px;border:1.5px solid ${allDone?'var(--green)':'var(--border)'}">
-        <div class="ck ${allDone?'on':''}" style="width:26px;height:26px;flex-shrink:0;border-radius:50%" onclick="tMedMeal(${p.id},'${sh}',${JSON.stringify(medsForMeal.map(m=>m.name))},${allDone})"></div>
+        <div class="ck ${allDone?'on':''}" style="width:26px;height:26px;flex-shrink:0;border-radius:50%"
+          data-pid="${p.id}" data-sh="${sh}" data-done="${allDone}"
+          data-meds="${medsForMeal.map(m=>m.name).join('|').replace(/"/g,'&quot;')}"
+          onclick="tMedMealEl(this)"></div>
         <div style="flex:1;margin-left:4px">
           <div style="font-size:11px;font-weight:700;color:var(--sky);margin-bottom:3px">🕐 ${meal}</div>
           <div>${medList}</div>
