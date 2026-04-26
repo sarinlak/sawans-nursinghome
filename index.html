@@ -1659,35 +1659,24 @@ function rShift(p,sh,lg){
   const prnMeds=getPRNMeds(p);
   if(shMeds.length){
     const mealOrder=sh==='D'?MEDS_D:MEDS_N;
-    h+=`<div class="dvr"></div><div class="sl">💊 ยา — ติ๊กเมื่อให้ยาครบแต่ละมื้อ</div>`;
+    h+=`<div class="dvr"></div><div class="sl">💊 ยา</div>`;
     mealOrder.forEach(meal=>{
       const medsForMeal=shMeds.filter(m=>m.meals.includes(meal));
       if(!medsForMeal.length)return;
-      // ใช้ key ตามชื่อยา (sh_med||name) เพื่อรองรับข้อมูลเก่า
-      // มื้อนี้ "ครบ" = ยาทุกตัวในมื้อนี้ถูกติ๊กหมดแล้ว
       const allDone=medsForMeal.every(med=>lg.meds?.['sh_med||'+med.name]);
-      const anyDone=medsForMeal.some(med=>lg.meds?.['sh_med||'+med.name]);
-      const medLines=medsForMeal.map(med=>{
-        const key='sh_med||'+med.name;
-        const done=lg.meds?.[key]||false;
+      const medList=medsForMeal.map(med=>{
         const q=(med.qtyPerMeal||{})[meal]||med.qty||'';
         const unit=med.method==='drop'?'หยอด':med.method==='inject'||med.method==='insulin'?'ครั้ง':'เม็ด';
         const eye=(med.method==='drop'&&med.eyeSide)?' 👁️'+med.eyeSide:'';
-        return`<div class="ci" style="padding:4px 0;border-bottom:1px solid var(--border)">
-          <div class="ck ${done?'on':''}" style="width:20px;height:20px" onclick="tMedKey(${p.id},'${sh}','${key.replace(/'/g,"\'")}')"></div>
-          <div style="flex:1;font-size:12px">${med.name}${q?` <strong style="color:var(--sky)">${q}${unit}</strong>`:''}${eye}</div>
-          <span style="font-size:11px;color:${done?'var(--green)':'var(--muted)'}">${done?'✅':'⬜'}</span>
-        </div>`;
+        return`<span style="margin-right:10px;font-size:12px">${med.name}${q?` <strong style="color:var(--sky)">${q}${unit}</strong>`:''}${eye}</span>`;
       }).join('');
-      h+=`<div style="background:${allDone?'var(--green-l)':'#fff'};border-radius:9px;padding:8px 10px;margin-bottom:6px;border:1.5px solid ${allDone?'var(--green)':'var(--border)'}">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <div style="font-size:12px;font-weight:700;color:var(--sky)">🕐 ${meal}</div>
-          <button onclick="tMedMeal(${p.id},'${sh}',${JSON.stringify(medsForMeal.map(m=>m.name))},${allDone})"
-            style="padding:4px 12px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:${allDone?'var(--green)':'var(--sky)'};color:#fff">
-            ${allDone?'✅ ครบแล้ว':'ติ๊กทั้งมื้อ ☝️'}
-          </button>
+      h+=`<div class="ci" style="align-items:center;background:${allDone?'var(--green-l)':'#fff'};border-radius:10px;padding:9px 12px;margin-bottom:6px;border:1.5px solid ${allDone?'var(--green)':'var(--border)'}">
+        <div class="ck ${allDone?'on':''}" style="width:26px;height:26px;flex-shrink:0;border-radius:50%" onclick="tMedMeal(${p.id},'${sh}',${JSON.stringify(medsForMeal.map(m=>m.name))},${allDone})"></div>
+        <div style="flex:1;margin-left:4px">
+          <div style="font-size:11px;font-weight:700;color:var(--sky);margin-bottom:3px">🕐 ${meal}</div>
+          <div>${medList}</div>
         </div>
-        ${medLines}
+        <span style="font-size:13px;color:${allDone?'var(--green)':'var(--muted)'};">${allDone?'✅':''}</span>
       </div>`;
     });
   }
@@ -1697,7 +1686,8 @@ function rShift(p,sh,lg){
       const key='prn||'+med.name;const done=lg.meds?.[key]||false;
       const mt=MED_METHODS.find(m=>m.k===med.method)||MED_METHODS[0];
       h+=`<div class="ci"><div class="ck ${done?'on':''}" onclick="tMedKey(${p.id},'${sh}','${key.replace(/'/g,"\'")}')"></div>
-        <div style="flex:1"><div class="cl ${done?'done':''}">${med.name}</div><div style="font-size:11px;margin-top:2px">${med.qty?`<span style="background:var(--gold);color:#fff;font-weight:700;padding:1px 7px;border-radius:8px;margin-right:4px">${med.qty}</span>`:''}<span class="med-badge ${mt.cls}">${mt.l}</span></div></div>
+        <div style="flex:1"><div class="cl ${done?'done':''}">${med.name}${med.qty?` <strong style="color:var(--gold)">${med.qty}</strong>`:''}</div>
+        <span class="med-badge ${mt.cls}" style="font-size:10px">${mt.l}</span></div>
       </div>`;
     });
     h+=`</div>`;
