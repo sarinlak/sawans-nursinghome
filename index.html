@@ -579,6 +579,8 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);min
   <div class="fl"><div class="fll">📅 วันที่เข้าพักศูนย์ (ใช้คำนวณรอบบิล)</div><input class="fi" id="pAdmit" type="date"></div>
   <div class="fl"><div class="fll">โรค / ความเสี่ยง</div><input class="fi" id="pdia" placeholder="เช่น เบาหวาน ความดัน"></div>
   <div class="fl"><div class="fll">🚨 โรงพยาบาลกรณีฉุกเฉิน</div><input class="fi" id="pEmergHosp" placeholder="เช่น รพ.นครสวรรค์ โทร 056-XXXXXX"></div>
+  <div class="fl"><div class="fll">📌 หมายเหตุประจำตัว <span style="font-size:11px;color:var(--muted)">(แสดงด้านหน้าชื่อ เช่น ระวังหกล้ม)</span></div>
+    <input class="fi" id="pNote" placeholder="เช่น ระวังพลัดตก / แพ้ยา Penicillin / ต้องการความเงียบ"></div>
   <div class="subh" style="color:var(--purple);margin-top:6px">🗓️ นัดพบแพทย์ (เพิ่มได้หลายนัด)</div>
   <div id="apptEntries"></div>
   <button class="btn bol" onclick="addApptEntry()" style="width:100%;justify-content:center;margin-top:4px;font-size:12px">➕ เพิ่มนัด</button>
@@ -1120,6 +1122,7 @@ function _oAddP(){
   ['pnam','page','proo','pdia','pEmergHosp'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   document.getElementById('pAdmit').value=tday();
   document.getElementById('pDob').value='';
+  document.getElementById('pNote').value='';
   document.querySelectorAll('#moP .chip').forEach(c=>c.classList.remove('sel'));
   renderMedEntries();renderApptEntries();
   document.getElementById('moP').classList.add('open');
@@ -1135,6 +1138,7 @@ function _oEditP(pid){
   document.getElementById('pAdmit').value=p.admitDate||'';
   document.getElementById('pDob').value=p.dob||'';
   document.getElementById('pEmergHosp').value=p.emergHosp||'';
+  document.getElementById('pNote').value=p.patNote||'';
   document.querySelectorAll('#moP .chip').forEach(c=>c.classList.remove('sel'));
   (p.foods||[]).forEach(f=>document.querySelector(`#fchips [data-f="${f}"]`)?.classList.add('sel'));
   tmpMeds=(p.medications||[]).map(m=>({...m,id:'m'+Date.now()+Math.random().toString(36).slice(2,5)}));
@@ -1151,20 +1155,21 @@ function saveP(){
   // ใช้รายการมาตรฐานเสมอ ไม่ต้องเลือก
   const tasksD=[...DEFAULT_TASKS_D];
   const tasksN=[...DEFAULT_TASKS_N];
-  const medications=tmpMeds.filter(m=>m.name.trim()).map(m=>({name:m.name.trim(),meals:m.meals,method:m.method||'eat',qty:m.qty||'',prn:m.prn||false,evenDays:m.evenDays||false,specificDays:m.specificDays||false,days:m.days||[],eyeSide:m.eyeSide||null}));
+  const medications=tmpMeds.filter(m=>m.name.trim()).map(m=>({name:m.name.trim(),meals:m.meals,method:m.method||'eat',qty:m.qty||'',qtyPerMeal:m.qtyPerMeal||{},prn:m.prn||false,evenDays:m.evenDays||false,specificDays:m.specificDays||false,days:m.days||[],eyeSide:m.eyeSide||null}));
   const appointments=tmpAppts.filter(a=>a.date).map(a=>({date:a.date,doctor:a.doctor||''}));
   const dob=document.getElementById('pDob').value;
   const emergHosp=document.getElementById('pEmergHosp').value.trim();
+  const patNote=document.getElementById('pNote').value.trim();
   const admit=document.getElementById('pAdmit').value;
   // first appointment for backward compat
   const appt=appointments[0]?.date||'';const doc=appointments[0]?.doctor||'';
   if(editPid){
     const p=S.patients.find(x=>x.id===editPid);
-    if(p)Object.assign(p,{name,age:document.getElementById('page').value,room:document.getElementById('proo').value.trim(),diag:document.getElementById('pdia').value.trim(),foods,tasksD,tasksN,medications,appointments,appointment:appt,doctor:doc,admitDate:admit,dob,emergHosp});
+    if(p)Object.assign(p,{name,age:document.getElementById('page').value,room:document.getElementById('proo').value.trim(),diag:document.getElementById('pdia').value.trim(),foods,tasksD,tasksN,medications,appointments,appointment:appt,doctor:doc,admitDate:admit,dob,emergHosp,patNote});
     save();cModal('moP');renderAll();toast('บันทึกข้อมูลเรียบร้อย ✅');
   } else {
     const id=Date.now();
-    S.patients.push({id,name,age:document.getElementById('page').value,room:document.getElementById('proo').value.trim(),diag:document.getElementById('pdia').value.trim(),foods,tasksD,tasksN,medications,appointments,appointment:appt,doctor:doc,admitDate:admit,dob,emergHosp,medHistory:[]});
+    S.patients.push({id,name,age:document.getElementById('page').value,room:document.getElementById('proo').value.trim(),diag:document.getElementById('pdia').value.trim(),foods,tasksD,tasksN,medications,appointments,appointment:appt,doctor:doc,admitDate:admit,dob,emergHosp,patNote,medHistory:[]});
     aSh[id]='D';save();cModal('moP');renderAll();
     toast('เพิ่มผู้สูงอายุแล้ว! ประเมิน Barthel ADL 📋');
     setTimeout(()=>openADL(id),300);
@@ -1190,47 +1195,108 @@ const WEEK_DAYS=[
   {k:0,l:'อา'}, // Sunday
 ];
 
-function renderMedEntries(){
-  const el=document.getElementById('medEntries');
-  if(!tmpMeds.length){el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:6px 0">ยังไม่มียา — กด ➕ เพิ่มยา</div>';return;}
-  el.innerHTML=tmpMeds.map(med=>`<div class="med-entry" id="me-${med.id}">
-    <div class="med-entry-head">
-      <input class="med-name-inp" placeholder="ชื่อยา เช่น Amlodipine 5mg" value="${med.name}" oninput="setMedName('${med.id}',this.value,'tmp')">
-      <button class="med-del" onclick="removeMedEntry('${med.id}')">🗑</button>
-    </div>
-    <div class="qty-row">
-      <span class="qty-lbl">จำนวน</span>
-      <input class="qty-inp" type="text" placeholder="เช่น 1 เม็ด" value="${med.qty||''}" oninput="setMedQty('${med.id}',this.value,'tmp')">
-    </div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
-      <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
-        <input type="checkbox" ${med.prn?'checked':''} onchange="setMedPrn('${med.id}',this.checked,'tmp')">
-        <span style="color:var(--gold);font-weight:600">PRN (ตามอาการ)</span>
-      </label>
-      <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
-        <input type="checkbox" ${med.evenDays?'checked':''} onchange="setMedEvenDays('${med.id}',this.checked,'tmp')">
-        <span style="color:var(--teal);font-weight:600">เฉพาะวันคู่</span>
-      </label>
-      <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
-        <input type="checkbox" ${med.specificDays?'checked':''} onchange="setMedSpecificDays('${med.id}',this.checked,'tmp')">
-        <span style="color:var(--purple);font-weight:600">เฉพาะบางวัน</span>
-      </label>
-    </div>
-    ${med.specificDays?`<div class="med-sub" style="color:var(--purple);margin-top:6px">เลือกวันที่ให้ยา</div>
-    <div style="display:flex;gap:5px;margin-bottom:6px">
-      ${WEEK_DAYS.map(d=>`<button style="width:34px;height:34px;border-radius:50%;border:2px solid ${(med.days||[]).includes(d.k)?'var(--purple)':'var(--border)'};background:${(med.days||[]).includes(d.k)?'var(--purple)':'#fff'};color:${(med.days||[]).includes(d.k)?'#fff':'var(--muted)'};font-size:12px;font-weight:600;cursor:pointer" onclick="toggleMedDay('${med.id}',${d.k},'tmp')">${d.l}</button>`).join('')}
-    </div>`:''
-    }
-    ${(med.prn||med.specificDays)?'':'<div class="med-sub" style="margin-top:7px">มื้อที่ให้</div><div class="meal-chips">'+MEAL_TIMES.map(m=>`<span class="meal-chip ${med.meals.includes(m)?'mc':''}" onclick="toggleMedMeal('${med.id}','${m}','tmp')">${m}</span>`).join('')+'</div>'}
-    ${med.specificDays&&!med.prn?'<div class="med-sub">มื้อที่ให้</div><div class="meal-chips">'+MEAL_TIMES.map(m=>`<span class="meal-chip ${med.meals.includes(m)?'mc':''}" onclick="toggleMedMeal('${med.id}','${m}','tmp')">${m}</span>`).join('')+'</div>':''}
-    <div class="med-sub">วิธีให้</div>
-    <div class="method-chips">${MED_METHODS.map(mt=>`<span class="method-chip ${med.method===mt.k?'mc':''}" onclick="setMedMethod('${med.id}','${mt.k}','tmp')">${mt.l}</span>`).join('')}</div>
-    ${med.method==='drop'?`<div class="med-sub" style="color:var(--sky);margin-top:6px">👁️ ข้างที่หยอด</div>
-    <div style="display:flex;gap:6px;margin-bottom:4px">
-      ${['ตาซ้าย','ตาขวา','ทั้งสองข้าง'].map(s=>`<button style="padding:5px 12px;border-radius:20px;font-size:12px;border:1.5px solid ${med.eyeSide===s?'var(--sky)':'var(--border)'};background:${med.eyeSide===s?'var(--sky-l)':'#fff'};color:${med.eyeSide===s?'var(--sky)':'var(--muted)'};cursor:pointer;font-weight:${med.eyeSide===s?'600':'400'}" onclick="setMedEyeSide('${med.id}','${s}','tmp')">${s}</button>`).join('')}
-    </div>`:''}
-  </div>`).join('');
+function buildQtyInputs(med){
+  return med.meals.map(function(m){
+    var q=(med.qtyPerMeal||{})[m]||'';
+    var unit=med.method==='drop'?'หยอด':med.method==='inject'||med.method==='insulin'?'ครั้ง':'เม็ด';
+    return '<div class="qty-row" style="margin-bottom:4px">'
+      +'<span class="qty-lbl" style="min-width:130px;font-size:11px">'+m+'</span>'
+      +'<input class="qty-inp" type="text" placeholder="1" value="'+q+'"'
+      +' data-mid="'+med.id+'" data-meal="'+encodeURIComponent(m)+'"'
+      +' oninput="handleQtyInput(this)">'
+      +'<span style="font-size:11px;color:var(--muted)">'+unit+'/มื้อ</span></div>';
+  }).join('');
 }
+
+function renderMedEntries(){
+  var el=document.getElementById('medEntries');
+  if(!tmpMeds.length){el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:6px 0">ยังไม่มียา — กด ➕ เพิ่มยา</div>';return;}
+  el.innerHTML=tmpMeds.map(function(med){
+    return buildOneMedEntry(med,'tmp');
+  }).join('');
+}
+
+function buildOneMedEntry(med,src){
+  var mealChips=MEAL_TIMES.map(function(m){
+    return '<span class="meal-chip '+(med.meals.includes(m)?'mc':'')+'"'
+      +' data-eid="'+med.id+'" data-meal="'+encodeURIComponent(m)+'" data-src="'+src+'"'
+      +' onclick="toggleMedMealEl(this)">'+m+'</span>';
+  }).join('');
+
+  var dayBtns=WEEK_DAYS.map(function(d){
+    var s=(med.days||[]).includes(d.k);
+    return '<button style="width:34px;height:34px;border-radius:50%;border:2px solid '+(s?'var(--purple)':'var(--border)')
+      +';background:'+(s?'var(--purple)':'#fff')+';color:'+(s?'#fff':'var(--muted)')+';font-size:12px;font-weight:600;cursor:pointer"'
+      +' data-eid="'+med.id+'" data-day="'+d.k+'" data-src="'+src+'" onclick="toggleMedDayEl(this)">'+d.l+'</button>';
+  }).join('');
+
+  var methodChips=MED_METHODS.map(function(mt){
+    return '<span class="method-chip '+(med.method===mt.k?'mc':'')+'"'
+      +' data-eid="'+med.id+'" data-method="'+mt.k+'" data-src="'+src+'" onclick="setMedMethodEl(this)">'+mt.l+'</span>';
+  }).join('');
+
+  var eyeBtns=['ตาซ้าย','ตาขวา','ทั้งสองข้าง'].map(function(s){
+    var sel=med.eyeSide===s;
+    return '<button style="padding:5px 12px;border-radius:20px;font-size:12px;border:1.5px solid '+(sel?'var(--sky)':'var(--border)')
+      +';background:'+(sel?'var(--sky-l)':'#fff')+';color:'+(sel?'var(--sky)':'var(--muted)')+';cursor:pointer;font-weight:'+(sel?'600':'400')+'"'
+      +' data-eid="'+med.id+'" data-side="'+s+'" data-src="'+src+'" onclick="setMedEyeSideEl(this)">'+s+'</button>';
+  }).join('');
+
+  var h='<div class="med-entry" id="me-'+med.id+'">'
+    +'<div class="med-entry-head">'
+    +'<input class="med-name-inp" placeholder="ชื่อยา เช่น Amlodipine 5mg" value="'+med.name+'"'
+    +' data-eid="'+med.id+'" data-src="'+src+'" oninput="setMedNameEl(this)">'
+    +'<button class="med-del" data-eid="'+med.id+'" onclick="removeMedEntryEl(this)">🗑</button>'
+    +'</div>'
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">'
+    +'<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">'
+    +'<input type="checkbox" '+(med.prn?'checked':'')+' data-eid="'+med.id+'" data-src="'+src+'" onchange="setMedPrnEl(this)">'
+    +'<span style="color:var(--gold);font-weight:600">PRN (ตามอาการ)</span></label>'
+    +'<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">'
+    +'<input type="checkbox" '+(med.evenDays?'checked':'')+' data-eid="'+med.id+'" data-src="'+src+'" onchange="setMedEvenDaysEl(this)">'
+    +'<span style="color:var(--teal);font-weight:600">เฉพาะวันคู่</span></label>'
+    +'<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">'
+    +'<input type="checkbox" '+(med.specificDays?'checked':'')+' data-eid="'+med.id+'" data-src="'+src+'" onchange="setMedSpecificDaysEl(this)">'
+    +'<span style="color:var(--purple);font-weight:600">เฉพาะบางวัน</span></label>'
+    +'</div>';
+
+  if(med.specificDays){
+    h+='<div class="med-sub" style="color:var(--purple);margin-top:6px">เลือกวันที่ให้ยา</div>'
+      +'<div style="display:flex;gap:5px;margin-bottom:6px">'+dayBtns+'</div>';
+  }
+  if(!med.prn){
+    h+='<div class="med-sub" style="margin-top:7px">มื้อที่ให้</div>'
+      +'<div class="meal-chips">'+mealChips+'</div>';
+    if(med.meals.length){
+      h+='<div class="med-sub" style="margin-top:6px;color:var(--sky)">จำนวนแต่ละมื้อ</div>'
+        +'<div>'+buildQtyInputs(med)+'</div>';
+    }
+  }
+  h+='<div class="med-sub" style="margin-top:6px">วิธีให้</div>'
+    +'<div class="method-chips">'+methodChips+'</div>';
+  if(med.method==='drop'){
+    h+='<div class="med-sub" style="color:var(--sky);margin-top:6px">👁️ ข้างที่หยอด</div>'
+      +'<div style="display:flex;gap:6px;margin-bottom:4px">'+eyeBtns+'</div>';
+  }
+  h+='</div>';
+  return h;
+}
+
+// Element-based event handlers (use data attributes to avoid inline quote issues)
+function setMedNameEl(el){setMedName(el.dataset.eid,el.value,el.dataset.src);}
+function removeMedEntryEl(el){
+  var src=el.closest('.med-entry')?.id?.replace('me-','')?'tmp':'tmp';
+  // determine src by checking which array has this id
+  if(tmpMeds.find(function(m){return m.id===el.dataset.eid;}))removeMedEntry(el.dataset.eid);
+  else removeReMedEntry(el.dataset.eid);
+}
+function setMedPrnEl(el){setMedPrn(el.dataset.eid,el.checked,el.dataset.src);}
+function setMedEvenDaysEl(el){setMedEvenDays(el.dataset.eid,el.checked,el.dataset.src);}
+function setMedSpecificDaysEl(el){setMedSpecificDays(el.dataset.eid,el.checked,el.dataset.src);}
+function toggleMedMealEl(el){toggleMedMeal(el.dataset.eid,decodeURIComponent(el.dataset.meal),el.dataset.src);}
+function toggleMedDayEl(el){toggleMedDay(el.dataset.eid,parseInt(el.dataset.day),el.dataset.src);}
+function setMedMethodEl(el){setMedMethod(el.dataset.eid,el.dataset.method,el.dataset.src);}
+function setMedEyeSideEl(el){setMedEyeSide(el.dataset.eid,el.dataset.side,el.dataset.src);}
 function setMedEyeSide(id,val,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m){m.eyeSide=m.eyeSide===val?null:val;}src==='tmp'?renderMedEntries():renderReMedEntries();}{const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m){m.prn=val;if(val){m.meals=[];m.specificDays=false;}}src==='tmp'?renderMedEntries():renderReMedEntries();}
 function setMedEvenDays(id,val,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m){m.evenDays=val;if(val){m.prn=false;m.specificDays=false;}}src==='tmp'?renderMedEntries():renderReMedEntries();}
 function setMedPrn(id,val,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m){m.prn=val;if(val){m.meals=[];m.specificDays=false;m.evenDays=false;}}src==='tmp'?renderMedEntries():renderReMedEntries();}
@@ -1238,6 +1304,13 @@ function setMedSpecificDays(id,val,src){const arr=src==='tmp'?tmpMeds:reMedTmp;c
 function toggleMedDay(id,day,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(!m)return;if(!m.days)m.days=[];m.days=m.days.includes(day)?m.days.filter(d=>d!==day):[...m.days,day];src==='tmp'?renderMedEntries():renderReMedEntries();}
 function setMedName(id,val,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m)m.name=val;}
 function setMedQty(id,val,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m)m.qty=val;}
+function setMedQtyMeal(id,meal,val,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(!m)return;if(!m.qtyPerMeal)m.qtyPerMeal={};m.qtyPerMeal[meal]=val;}
+function handleQtyInput(el){
+  const id=el.dataset.mid; const meal=decodeURIComponent(el.dataset.meal||''); const val=el.value;
+  // try both arrays
+  const src=tmpMeds.find(function(m){return m.id===id;})?'tmp':'re';
+  setMedQtyMeal(id,meal,val,src);
+}
 function toggleMedMeal(id,meal,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(!m)return;m.meals=m.meals.includes(meal)?m.meals.filter(x=>x!==meal):[...m.meals,meal];src==='tmp'?renderMedEntries():renderReMedEntries();}
 function setMedMethod(id,method,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m){m.method=method;src==='tmp'?renderMedEntries():renderReMedEntries();}}
 
@@ -1261,42 +1334,7 @@ function addReMedEntry(){
 function renderReMedEntries(){
   const el=document.getElementById('reMedEntries');
   if(!reMedTmp.length){el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:6px 0">ยังไม่มียา — กด ➕ เพิ่มยา</div>';return;}
-  el.innerHTML=reMedTmp.map(med=>`<div class="med-entry">
-    <div class="med-entry-head">
-      <input class="med-name-inp" placeholder="ชื่อยา เช่น Amlodipine 5mg" value="${med.name}" oninput="setMedName('${med.id}',this.value,'re')">
-      <button class="med-del" onclick="removeReMedEntry('${med.id}')">🗑</button>
-    </div>
-    <div class="qty-row">
-      <span class="qty-lbl">จำนวน</span>
-      <input class="qty-inp" type="text" placeholder="เช่น 1 เม็ด" value="${med.qty||''}" oninput="setMedQty('${med.id}',this.value,'re')">
-    </div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
-      <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
-        <input type="checkbox" ${med.prn?'checked':''} onchange="setMedPrn('${med.id}',this.checked,'re')">
-        <span style="color:var(--gold);font-weight:600">PRN (ตามอาการ)</span>
-      </label>
-      <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
-        <input type="checkbox" ${med.evenDays?'checked':''} onchange="setMedEvenDays('${med.id}',this.checked,'re')">
-        <span style="color:var(--teal);font-weight:600">เฉพาะวันคู่</span>
-      </label>
-      <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
-        <input type="checkbox" ${med.specificDays?'checked':''} onchange="setMedSpecificDays('${med.id}',this.checked,'re')">
-        <span style="color:var(--purple);font-weight:600">เฉพาะบางวัน</span>
-      </label>
-    </div>
-    ${med.specificDays?`<div class="med-sub" style="color:var(--purple);margin-top:6px">เลือกวันที่ให้ยา</div>
-    <div style="display:flex;gap:5px;margin-bottom:6px">
-      ${WEEK_DAYS.map(d=>`<button style="width:34px;height:34px;border-radius:50%;border:2px solid ${(med.days||[]).includes(d.k)?'var(--purple)':'var(--border)'};background:${(med.days||[]).includes(d.k)?'var(--purple)':'#fff'};color:${(med.days||[]).includes(d.k)?'#fff':'var(--muted)'};font-size:12px;font-weight:600;cursor:pointer" onclick="toggleMedDay('${med.id}',${d.k},'re')">${d.l}</button>`).join('')}
-    </div>`:''}
-    ${(med.prn||med.specificDays)?'':'<div class="med-sub" style="margin-top:7px">มื้อที่ให้</div><div class="meal-chips">'+MEAL_TIMES.map(m=>`<span class="meal-chip ${med.meals.includes(m)?'mc':''}" onclick="toggleMedMeal('${med.id}','${m}','re')">${m}</span>`).join('')+'</div>'}
-    ${med.specificDays&&!med.prn?'<div class="med-sub">มื้อที่ให้</div><div class="meal-chips">'+MEAL_TIMES.map(m=>`<span class="meal-chip ${med.meals.includes(m)?'mc':''}" onclick="toggleMedMeal('${med.id}','${m}','re')">${m}</span>`).join('')+'</div>':''}
-    <div class="med-sub">วิธีให้</div>
-    <div class="method-chips">${MED_METHODS.map(mt=>`<span class="method-chip ${med.method===mt.k?'mc':''}" onclick="setMedMethod('${med.id}','${mt.k}','re')">${mt.l}</span>`).join('')}</div>
-    ${med.method==='drop'?`<div class="med-sub" style="color:var(--sky);margin-top:6px">👁️ ข้างที่หยอด</div>
-    <div style="display:flex;gap:6px;margin-bottom:4px">
-      ${['ตาซ้าย','ตาขวา','ทั้งสองข้าง'].map(s=>`<button style="padding:5px 12px;border-radius:20px;font-size:12px;border:1.5px solid ${med.eyeSide===s?'var(--sky)':'var(--border)'};background:${med.eyeSide===s?'var(--sky-l)':'#fff'};color:${med.eyeSide===s?'var(--sky)':'var(--muted)'};cursor:pointer;font-weight:${med.eyeSide===s?'600':'400'}" onclick="setMedEyeSide('${med.id}','${s}','re')">${s}</button>`).join('')}
-    </div>`:''}
-  </div>`).join('');
+  el.innerHTML=reMedTmp.map(function(med){return buildOneMedEntry(med,'re');}).join('');
 }
 function removeReMedEntry(id){reMedTmp=reMedTmp.filter(m=>m.id!==id);renderReMedEntries();}
 function saveReMed(){
@@ -1304,7 +1342,7 @@ function saveReMed(){
   const date=document.getElementById('reMedDate').value||tday();
   const doc=document.getElementById('reMedDoc').value.trim();
   const appt=document.getElementById('reMedAppt').value;
-  const newMeds=reMedTmp.filter(m=>m.name.trim()).map(m=>({name:m.name.trim(),meals:m.meals,method:m.method||'eat',qty:m.qty||'',prn:m.prn||false,evenDays:m.evenDays||false,specificDays:m.specificDays||false,days:m.days||[],eyeSide:m.eyeSide||null}));
+  const newMeds=reMedTmp.filter(m=>m.name.trim()).map(m=>({name:m.name.trim(),meals:m.meals,method:m.method||'eat',qty:m.qty||'',qtyPerMeal:m.qtyPerMeal||{},prn:m.prn||false,evenDays:m.evenDays||false,specificDays:m.specificDays||false,days:m.days||[],eyeSide:m.eyeSide||null}));
   // save to history
   if(!p.medHistory)p.medHistory=[];
   p.medHistory.unshift({date,doctor:doc,meds:newMeds});
@@ -1375,6 +1413,7 @@ function rPats(){
         <div style="display:flex;align-items:center;gap:9px">
           <div class="av">${ini}</div>
           <div><div class="pn" style="display:flex;align-items:center;flex-wrap:wrap;gap:3px">${p.name}${adlDot}${wb}${apptBadge}</div>
+          ${p.patNote?`<div style="font-size:11px;background:var(--gold-l);color:var(--gold);border-radius:6px;padding:2px 8px;margin-top:2px;font-weight:600">📌 ${p.patNote}</div>`:''}
           <div class="ps">${p.age?p.age+' ปี':''}${p.room?' • '+p.room:''}${p.diag?' | '+p.diag:''}</div></div>
         </div>
         <div style="display:flex;align-items:center;gap:7px">
@@ -1535,12 +1574,19 @@ function rShift(p,sh,lg){
       const mt=MED_METHODS.find(m=>m.k===med.method)||MED_METHODS[0];
       const dayBadge=med.evenDays?'<span style="font-size:10px;background:#E6F9F7;color:var(--teal);padding:1px 6px;border-radius:10px;margin-left:3px">วันคู่</span>':(med.specificDays&&med.days&&med.days.length?'<span style="font-size:10px;background:var(--purple-l);color:var(--purple);padding:1px 6px;border-radius:10px;margin-left:3px">'+med.days.map(function(d){return getDowLabel(d);}).join(' ')+'</span>':'');
       const eyeBadge=(med.method==='drop'&&med.eyeSide)?'<span style="font-size:10px;background:var(--sky-l);color:var(--sky);padding:1px 6px;border-radius:10px;margin-left:3px">👁️ '+med.eyeSide+'</span>':'';
+      const qpm=med.qtyPerMeal||{};
+      const mealQtyLines=med.meals.map(m=>{
+        const q=qpm[m]||med.qty||'';
+        return`<div style="font-size:11px;color:var(--muted);padding:1px 0">🕐 ${m}${q?` — <strong style="color:var(--sky)">${q} ${med.method==='drop'?'หยอด':med.method==='inject'||med.method==='insulin'?'ครั้ง':'เม็ด'}</strong>`:''}</div>`;
+      }).join('');
       h+=`<div class="ci" style="padding:8px 0;align-items:flex-start">
         <div class="ck ${done?'on':''}" onclick="tMedKey(${p.id},'${sh}','${key.replace(/'/g,"\\'")}')"></div>
         <div style="flex:1">
-          <div class="cl ${done?'done':''}">${med.name}</div>
-          <div style="font-size:11px;margin-top:2px">${med.qty?`<span style="background:var(--gold);color:#fff;font-weight:700;padding:1px 7px;border-radius:8px;margin-right:4px">${med.qty}</span>`:''}<span class="med-badge ${mt.cls}">${mt.l}</span></div>
+          <div class="cl ${done?'done':''}" style="font-weight:600">${med.name}${dayBadge}${eyeBadge}</div>
+          <div style="margin-top:3px">${mealQtyLines}</div>
+          <div style="margin-top:3px"><span class="med-badge ${mt.cls}">${mt.l}</span></div>
         </div>
+        <span style="font-size:11px;font-weight:700;color:${done?'var(--green)':'var(--muted)'}">${done?'✅':'⬜'}</span>
       </div>`;
     });
     h+=`</div>`;
@@ -1700,7 +1746,112 @@ function sVS(pid,sh,time,field,val){const lg=eLog(pid,curDate,sh);if(!lg.vsData)
 }
 
 function rVSChart(pid,sh,lg){
-  const W=340,H=160,PL=36,PR=10,PT=10,PB=30;
+  // ฟอร์มปรอทแบบมาตรฐาน: แกน Y ซ้าย = T°F + °C, แกน Y ขวา = Pulse
+  // แกน X = เวลา 2,6,10,14,18,22
+  const W=360,H=240,PL=54,PR=46,PT=14,PB=28;
+  const CW=W-PL-PR, CH=H-PT-PB;
+  const n=VS_TIMES.length;
+  const xStep=CW/(n-1);
+
+  // Temperature scale: 35°C (95°F) ถึง 41°C (105.8°F)
+  const T_MIN=35, T_MAX=41, T_RANGE=T_MAX-T_MIN;
+  // Pulse scale: 40 ถึง 160
+  const P_MIN=40, P_MAX=200, P_RANGE=P_MAX-P_MIN;
+
+  function mapT(c){return c!=null?PT+CH-((c-T_MIN)/T_RANGE)*CH:null;}
+  function mapP(v){return v!=null?PT+CH-((v-P_MIN)/P_RANGE)*CH:null;}
+  function xi(i){return PL+i*xStep;}
+
+  // Collect data points
+  const temps=[],hrs=[],bpSys=[],bpDia=[],rrs=[],o2s=[];
+  VS_TIMES.forEach(function(t){
+    const vsd=lg.vsData?.[t]||{};
+    temps.push(vsd.temp?parseFloat(vsd.temp):null);
+    hrs.push(vsd.hr?parseFloat(vsd.hr):null);
+    if(vsd.bp){const p=vsd.bp.split('/');bpSys.push(parseFloat(p[0])||null);bpDia.push(parseFloat(p[1])||null);}
+    else{bpSys.push(null);bpDia.push(null);}
+    rrs.push(vsd.rr?parseFloat(vsd.rr):null);
+    o2s.push(vsd.o2?parseFloat(vsd.o2):null);
+  });
+
+  function polyline(vals,mapFn,col,dash,r,fill){
+    const pts=[];vals.forEach(function(v,i){const y=mapFn(v);if(y!=null&&y>=PT-5&&y<=H-PB+5)pts.push([xi(i),y]);});
+    if(!pts.length)return'';
+    let d='';pts.forEach(function(p,i){d+=(i===0?'M':'L')+p[0].toFixed(1)+','+p[1].toFixed(1);});
+    const dots=pts.map(function(p){
+      return'<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="'+r+'" fill="'+(fill||col)+'" stroke="'+col+'" stroke-width="1.5"/>';
+    }).join('');
+    return'<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="2"'+(dash?' stroke-dasharray="4,3"':'')+'/>'+(r>0?dots:'');
+  }
+
+  // Grid lines — temperature (horizontal)
+  let grid='';
+  [35,36,37,38,39,40,41].forEach(function(c){
+    const y=mapT(c);
+    const isMajor=c===37;
+    grid+='<line x1="'+PL+'" y1="'+y.toFixed(1)+'" x2="'+(W-PR)+'" y2="'+y.toFixed(1)+'" stroke="'+(isMajor?'#E85555':'#BDDDF5')+'" stroke-width="'+(isMajor?'1.5':'0.5')+'"/>';
+    // °C label left
+    grid+='<text x="'+(PL-4)+'" y="'+(y+3).toFixed(1)+'" font-size="8" fill="#5577AA" text-anchor="end">'+c+'</text>';
+    // °F label (convert)
+    const f=(c*9/5+32).toFixed(1);
+    grid+='<text x="8" y="'+(y+3).toFixed(1)+'" font-size="7.5" fill="#888" text-anchor="start">'+f+'</text>';
+  });
+
+  // Pulse grid lines (right axis, dashed)
+  [40,60,80,100,120,140,160].forEach(function(v){
+    const y=mapP(v);
+    grid+='<text x="'+(W-PR+4)+'" y="'+(y+3).toFixed(1)+'" font-size="8" fill="#2B78D4" text-anchor="start">'+v+'</text>';
+  });
+
+  // Vertical grid (time)
+  let vGrid='';
+  VS_TIMES.forEach(function(t,i){
+    const x=xi(i);
+    vGrid+='<line x1="'+x.toFixed(1)+'" y1="'+PT+'" x2="'+x.toFixed(1)+'" y2="'+(H-PB)+'" stroke="#BDDDF5" stroke-width="0.5"/>';
+    vGrid+='<text x="'+x.toFixed(1)+'" y="'+(H-PB+10).toFixed(1)+'" font-size="8.5" fill="#5577AA" text-anchor="middle">'+t.slice(0,5)+'</text>';
+  });
+
+  // Axes
+  const axes='<line x1="'+PL+'" y1="'+PT+'" x2="'+PL+'" y2="'+(H-PB)+'" stroke="#6699BB" stroke-width="1.5"/>'
+    +'<line x1="'+PL+'" y1="'+(H-PB)+'" x2="'+(W-PR)+'" y2="'+(H-PB)+'" stroke="#6699BB" stroke-width="1.5"/>'
+    +'<line x1="'+(W-PR)+'" y1="'+PT+'" x2="'+(W-PR)+'" y2="'+(H-PB)+'" stroke="#2B78D4" stroke-width="1" stroke-dasharray="3,2"/>';
+
+  // Labels
+  const labels='<text x="5" y="'+(PT+CH/2)+'" font-size="8" fill="#888" text-anchor="middle" transform="rotate(-90,5,'+(PT+CH/2)+')">°F</text>'
+    +'<text x="'+(PL-14)+'" y="'+(PT+CH/2)+'" font-size="8" fill="#5577AA" text-anchor="middle" transform="rotate(-90,'+(PL-14)+','+(PT+CH/2)+')">°C</text>'
+    +'<text x="'+(W-PR+28)+'" y="'+(PT+CH/2)+'" font-size="8" fill="#2B78D4" text-anchor="middle" transform="rotate(90,'+(W-PR+28)+','+(PT+CH/2)+')">Pulse</text>'
+    // legend
+    +'<circle cx="'+(PL+4)+'" cy="'+(PT-4)+'" r="3" fill="#E85555"/>'
+    +'<text x="'+(PL+9)+'" y="'+(PT-1)+'" font-size="7.5" fill="#E85555">T°C</text>'
+    +'<circle cx="'+(PL+36)+'" cy="'+(PT-4)+'" r="3" fill="#2B78D4"/>'
+    +'<text x="'+(PL+41)+'" y="'+(PT-1)+'" font-size="7.5" fill="#2B78D4">Pulse</text>';
+
+  const svgContent=grid+vGrid+axes
+    +polyline(temps,mapT,'#E85555',false,3,'#E85555')
+    +polyline(hrs,mapP,'#2B78D4',false,3,'#2B78D4')
+    +labels;
+
+  const svg='<svg width="100%" viewBox="0 0 '+W+' '+H+'" style="background:#F5FAFF;border:1px solid #BDDDF5;border-radius:8px;display:block">'+svgContent+'</svg>';
+
+  // Data table below
+  const td0='<td style="padding:2px 5px;border:1px solid #BDDDF5;background:#EAF4FC;font-size:10px;font-weight:600;white-space:nowrap">';
+  const tdc='<td style="padding:2px 4px;border:1px solid #BDDDF5;font-size:11px;text-align:center">';
+  let rows='';
+  const rowData=[
+    {l:'B.P. Sys',vals:bpSys,col:'#C03040'},{l:'B.P. Dia',vals:bpDia,col:'#E07080'},
+    {l:'RR',vals:rrs,col:'#558833'},{l:'O2 %',vals:o2s,col:'#2255CC'},
+  ];
+  rowData.forEach(function(row){
+    rows+='<tr>'+td0+'<span style="color:'+row.col+'">'+row.l+'</span></td>';
+    row.vals.forEach(function(v){rows+=tdc+(v!=null?v:'-')+'</td>';});
+    rows+='</tr>';
+  });
+  const table='<div style="overflow-x:auto;margin-top:4px"><table style="width:100%;border-collapse:collapse;min-width:300px">'
+    +'<tr>'+td0+'เวลา</td>'+VS_TIMES.map(function(t){return'<th style="padding:2px 4px;border:1px solid #BDDDF5;background:#EAF4FC;font-size:10px;color:#5577AA">'+t.slice(0,5)+'</th>';}).join('')+'</tr>'
+    +rows+'</table></div>';
+
+  return'<div style="margin:6px 0">'+svg+table+'</div>';
+}
   const CW=W-PL-PR,CH=H-PT-PB;
   const n=VS_TIMES.length;
   const xStep=CW/(n-1);
@@ -1768,13 +1919,7 @@ function rVSChart(pid,sh,lg){
   });
   const tdLbl='<td style="padding:3px 7px;border:1px solid #CCDFF0;background:#F0F5FC;font-weight:600;white-space:nowrap">';
   const tableHtml='<div style="overflow-x:auto;margin-top:4px"><table style="width:100%;border-collapse:collapse;font-size:11px;min-width:320px">'
-    +'<tr>'+tdLbl+'🌡️ T°C</td>'+tRow+'</tr>'
-    +'<tr>'+tdLbl+'💓 HR</td>'+hrRow+'</tr>'
-    +'<tr>'+tdLbl+'🫁 O2%</td>'+o2Row+'</tr>'
-    +'</table></div>';
 
-  return '<div id="vs-chart-'+pid+'-'+sh+'" style="margin:6px 0">'+svgPart+tableHtml+'</div>';
-}
 function delP(pid){requireAdmin(()=>{if(!confirm('ต้องการลบผู้สูงอายุนี้?'))return;S.patients=S.patients.filter(p=>p.id!==pid);delete S.logs[pid];if(S.supplyLogs)delete S.supplyLogs[pid];save();renderAll();toast('ลบเรียบร้อย');},'ลบข้อมูลผู้สูงอายุ');}
 
 function uSum(){
@@ -2686,178 +2831,230 @@ function rHandover(){
   const el=document.getElementById('hvList');
   const lbl=document.getElementById('hvDateLbl');
   if(!el)return;
-  // always sync button states
   const bD=document.getElementById('hvD');const bN=document.getElementById('hvN');
   if(bD)bD.className='ssb'+(hvSh==='D'?' aD':'');
   if(bN)bN.className='ssb'+(hvSh==='N'?' aN':'');
   const shDate=getShiftDate(hvSh);
   if(lbl)lbl.textContent=(hvSh==='D'?'☀️ เวร D (08:00–16:00)':'🌙 เวร N (16:00–08:00)')+' • '+fmtTH(shDate);
-  if(!S.patients.length){el.innerHTML=`<div class="empty"><div class="ei">📋</div>ยังไม่มีผู้สูงอายุ</div>`;return;}
 
-  el.innerHTML=sortPatients(S.patients).map(p=>{
-    const lg=gLog(p.id,shDate,hvSh);
-    const hv=gHvLog(p.id,hvSh);
-    const v=lg.v||{};
-    const isOpen=oC['hv_'+p.id];
-    const ini=p.name.replace(/คุณ|นาย|นาง|นางสาว/g,'').trim().charAt(0)||'?';
-
-    // quick status dots
-    const vsDone=!!(v.bp||v.temp||v.hr);
-    const medsDone=(()=>{const sm=getMedsForShift(p,hvSh);if(!sm.length)return true;const done=sm.filter(m=>lg.meds?.['sh_med||'+m.name]).length;return done===sm.length;})();
-    const stoolDone=lg.stool?.did!==null&&lg.stool?.did!==undefined;
-    const io=hv.io||{};const ioDone=!!(io.intake||io.output);
-
-    const dots=[
-      {done:vsDone,label:'V/S'},
-      {done:medsDone,label:'ยา'},
-      {done:stoolDone,label:'ขับถ่าย'},
-      {done:ioDone,label:'I/O'},
-    ];
-
-    return`<div class="hv-card">
-      <div class="hv-head" onclick="oC['hv_'+${p.id}]=!oC['hv_'+${p.id}];rHandover()">
-        <div style="display:flex;align-items:center;gap:9px">
-          <div class="av">${ini}</div>
-          <div>
-            <div class="hv-name">${p.name}</div>
-            <div class="hv-room">${p.room||''}${p.diag?' • '+p.diag:''}</div>
-          </div>
-        </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
-          <div class="hv-status">
-            ${dots.map(d=>`<div style="display:flex;align-items:center;gap:2px">
-              <div class="hv-dot" style="background:${d.done?'var(--green)':'var(--border)'}"></div>
-              <span style="font-size:10px;color:var(--muted)">${d.label}</span>
-            </div>`).join('')}
-          </div>
-          <span class="chv ${isOpen?'op':''}">▼</span>
-        </div>
-      </div>
-      <div class="${isOpen?'hv-body':'hv-body h'}">
-        ${rHvBody(p,hvSh,lg,hv,v)}
-      </div>
-    </div>`;
-  }).join('');
+  // แสดงข้อมูลจาก localStorage ทันที ไม่รอ Firebase
+  if(!S.patients||!S.patients.length){
+    el.innerHTML='<div class="empty"><div class="ei">📋</div>ยังไม่มีผู้สูงอายุ</div>';
+    return;
+  }
+  el.innerHTML=sortPatients(S.patients).map(function(p){return rHvCard(p,hvSh,shDate);}).join('');
 }
 
-function rHvBody(p,sh,lg,hv,v){
+function rHvCard(p,sh,shDate){
+  const lg=gLog(p.id,shDate,sh);
+  const hv=gHvLog(p.id,sh);
+  const v=lg.v||{};
+  const isOpen=oC['hv_'+p.id];
+  const ini=p.name.replace(/คุณ|นาย|นาง|นางสาว/g,'').trim().charAt(0)||'?';
+
+  // Status color from V/S status
+  const statusColor={ปกติ:'var(--green)',ต้องดูแล:'var(--gold)',เฝ้าระวัง:'var(--orange)',ส่งหมอ:'var(--rose)'}[v.status]||'var(--muted)';
+
+  // ADL level color
+  const adlColor=p.adl?.score!==undefined?adlLevel(p.adl.score).dot:'var(--muted)';
+
+  // Quick summary line
+  const shMeds=getMedsForShift(p,sh);
+  const medDone=shMeds.filter(m=>lg.meds?.['sh_med||'+m.name]).length;
+  const medTotal=shMeds.length;
+  const isFeed=(lg.foodMode||((p.foods||[]).some(f=>f.includes('Feed')||f.includes('สาย'))?'feed':'normal'))==='feed';
+
+  return`<div class="hv-card">
+    <div class="hv-head" onclick="oC['hv_'+${p.id}]=!oC['hv_'+${p.id}];rHandover()">
+      <div style="display:flex;align-items:center;gap:9px">
+        <div class="av" style="background:${adlColor}">${ini}</div>
+        <div>
+          <div style="font-size:14px;font-weight:700">${p.name}${p.room?' <span style="font-size:11px;color:var(--muted)">(${p.room})</span>':''}</div>
+          ${p.patNote?`<div style="font-size:11px;color:var(--gold);font-weight:600">📌 ${p.patNote}</div>`:''}
+          <div style="font-size:11px;color:${statusColor};font-weight:600;margin-top:1px">${v.status||'ยังไม่บันทึก V/S'}</div>
+        </div>
+      </div>
+      <span class="chv ${isOpen?'op':''}">▼</span>
+    </div>
+    <div class="${isOpen?'hv-body':'hv-body h'}">
+      ${rHvSummary(p,sh,lg,hv,v,isFeed,shMeds,medDone,medTotal)}
+    </div>
+  </div>`;
+}
+
+function rHvSummary(p,sh,lg,hv,v,isFeed,shMeds,medDone,medTotal){
+  let h='';
   const io=hv.io||{};
   const inp=parseInt(io.intake)||0,out=parseInt(io.output)||0;
   const bal=inp-out;
 
-  let h='';
-
-  // V/S summary
+  // === 1. สัญญาณชีพ ===
   h+=`<div class="hv-sec"><div class="hv-sl">🩺 สัญญาณชีพ</div>`;
   if(v.bp||v.temp||v.hr){
-    h+=`<div class="hv-row"><span class="hv-lbl">BP</span><span class="hv-val">${v.bp||'-'} mmHg</span></div>
-    <div class="hv-row"><span class="hv-lbl">T°C</span><span class="hv-val">${v.temp||'-'}</span></div>
-    <div class="hv-row"><span class="hv-lbl">HR</span><span class="hv-val">${v.hr||'-'} bpm | RR ${v.rr||'-'}/min | O2 ${v.o2||'-'}%</span></div>
-    ${v.status?`<div class="hv-row"><span class="hv-lbl">สถานะ</span><span class="hv-val" style="color:${v.status==='ปกติ'?'var(--green)':'var(--rose)'}">${v.status}</span></div>`:''}`;
-  } else h+=`<div style="font-size:12px;color:var(--rose)">⚠️ ยังไม่ได้บันทึก V/S</div>`;
+    const statusColor={ปกติ:'var(--green)',ต้องดูแล:'var(--gold)',เฝ้าระวัง:'var(--orange)',ส่งหมอ:'var(--rose)'}[v.status]||'var(--muted)';
+    h+=`<div style="display:flex;flex-wrap:wrap;gap:6px;font-size:12px">
+      ${v.bp?`<span style="background:var(--bg);padding:3px 8px;border-radius:7px;border:1px solid var(--border)">💉 ${v.bp} mmHg</span>`:''}
+      ${v.temp?`<span style="background:var(--bg);padding:3px 8px;border-radius:7px;border:1px solid var(--border)">🌡️ ${v.temp}°C</span>`:''}
+      ${v.hr?`<span style="background:var(--bg);padding:3px 8px;border-radius:7px;border:1px solid var(--border)">💓 ${v.hr} bpm</span>`:''}
+      ${v.rr?`<span style="background:var(--bg);padding:3px 8px;border-radius:7px;border:1px solid var(--border)">💨 RR ${v.rr}/min</span>`:''}
+      ${v.o2?`<span style="background:var(--bg);padding:3px 8px;border-radius:7px;border:1px solid var(--border)">🫁 O2 ${v.o2}%</span>`:''}
+      ${v.status?`<span style="background:${{ปกติ:'var(--green-l)',ต้องดูแล:'var(--gold-l)',เฝ้าระวัง:'var(--orange-l)',ส่งหมอ:'var(--rose-l)'}[v.status]||'var(--bg)'};color:${{ปกติ:'var(--green)',ต้องดูแล:'var(--gold)',เฝ้าระวัง:'var(--orange)',ส่งหมอ:'var(--rose)'}[v.status]||'var(--muted)'};padding:3px 8px;border-radius:7px;font-weight:700">${v.status}</span>`:''}
+    </div>`;
+  } else {
+    h+=`<div style="font-size:12px;color:var(--rose)">⚠️ ยังไม่ได้บันทึก V/S</div>`;
+  }
   h+=`</div>`;
 
-  // Meds summary
-  const shMeds=getMedsForShift(p,sh);
-  const totMed=shMeds.length;
-  const doneMed=shMeds.filter(m=>lg.meds?.['sh_med||'+m.name]).length;
-  h+=`<div class="hv-sec"><div class="hv-sl">💊 ยา (5 Right)</div>`;
-  if(totMed){
-    const allDone=doneMed===totMed;
-    h+=`<div class="hv-row"><span class="hv-lbl">สถานะยา</span><span class="hv-val" style="color:${allDone?'var(--green)':'var(--rose)'}">
-      ${allDone?'✅ ให้ยาครบ':'⚠️ ให้ยา '+doneMed+'/'+totMed+' ตัว'}</span></div>`;
-  }
-  // 5 Right checklist
-  h+=`<div style="margin-top:5px">${FIVE_RIGHT.map(item=>{
-    const done=hv.fiveRight?.[item]||false;
-    return`<div class="risk-item"><div class="risk-ck ${done?'on':''}" onclick="tHvItem(${p.id},'${sh}','fiveRight','${item.replace(/'/g,"\\'")}')"></div><span>${item}</span></div>`;
-  }).join('')}</div></div>`;
-
-  // Food summary
-  const isFeed=(p.foods||[]).some(f=>f.includes('Feed')||f.includes('สาย'));
-  h+=`<div class="hv-sec"><div class="hv-sl">🍽️ อาหาร</div>`;
+  // === 2. อาหาร ===
+  h+=`<div class="hv-sec"><div class="hv-sl">🍽️ อาหาร / โภชนาการ</div>`;
   if(isFeed){
     const feedMeals=sh==='D'?[{k:'feed08',l:'08:00'},{k:'feed12',l:'12:00'}]:[{k:'feed16',l:'16:00'},{k:'feed20',l:'20:00'}];
-    feedMeals.forEach(ml=>{const fd=lg.food?.[ml.k]||{};const formula=fd.formula?' ('+fd.formula+')':'';
-      h+=`<div class="hv-row"><span class="hv-lbl">Feed ${ml.l}</span><span class="hv-val">${fd.feedDone===true?'✅ ครบ'+formula:fd.feedDone===false?'❌ ไม่ครบ'+(fd.feedNote?' – '+fd.feedNote:'')+formula:'—'}</span></div>`;
+    feedMeals.forEach(ml=>{
+      const fd=lg.food?.[ml.k]||{};
+      const formula=fd.formula?' ('+fd.formula+')':'';
+      const status=fd.feedDone===true?'✅ รับได้ครบ'+formula:fd.feedDone===false?'❌ รับไม่ครบ'+(fd.feedNote?' — '+fd.feedNote:'')+formula:'—';
+      h+=`<div class="hv-row"><span class="hv-lbl">Feed ${ml.l}</span><span class="hv-val">${status}</span></div>`;
     });
   } else {
     const meals=sh==='D'?[{k:'breakfast',l:'เช้า'},{k:'lunch',l:'เที่ยง'}]:[{k:'dinner',l:'เย็น'}];
-    meals.forEach(ml=>{const fd=lg.food?.[ml.k]||{};
-      h+=`<div class="hv-row"><span class="hv-lbl">อาหาร${ml.l}</span><span class="hv-val">${fd.type||''}${fd.amount?' '+fd.amount:''}${fd.selfFeed===true?' (ทานเอง)':fd.selfFeed===false?' (ป้อน)':''}</span></div>`;
+    meals.forEach(ml=>{
+      const fd=lg.food?.[ml.k]||{};
+      if(fd.type||fd.amount||fd.selfFeed!==undefined){
+        const amt=fd.amount||'';
+        const feed=fd.selfFeed===true?'ทานเอง':fd.selfFeed===false?'เจ้าหน้าที่ป้อน':'';
+        h+=`<div class="hv-row"><span class="hv-lbl">อาหาร${ml.l}</span><span class="hv-val">${fd.type||''} ${amt} ${feed}</span></div>`;
+      } else {
+        h+=`<div class="hv-row"><span class="hv-lbl">อาหาร${ml.l}</span><span class="hv-val" style="color:var(--muted)">ยังไม่บันทึก</span></div>`;
+      }
     });
   }
   h+=`</div>`;
 
-  // Stool/Urine
+  // === 3. ยา ===
+  h+=`<div class="hv-sec"><div class="hv-sl">💊 ยาและจิตใจ (5 Right)</div>`;
+  const allMedDone=medDone===medTotal&&medTotal>0;
+  h+=`<div class="hv-row"><span class="hv-lbl">สถานะยา</span><span class="hv-val" style="color:${allMedDone?'var(--green)':medTotal===0?'var(--muted)':'var(--rose)'}">
+    ${medTotal===0?'ไม่มียา':allMedDone?'✅ ให้ยาครบ':'⚠️ ให้ยา '+medDone+'/'+medTotal+' ตัว'}</span></div>`;
+  // 5 Right
+  const rightDone=FIVE_RIGHT.filter(i=>hv.fiveRight?.[i]).length;
+  h+=`<div class="hv-row"><span class="hv-lbl">5 Right</span>
+    <span class="hv-val" style="color:${rightDone===5?'var(--green)':'var(--muted)'}">
+      ${rightDone===5?'✅ ครบ':rightDone+'/5'} — ${FIVE_RIGHT.filter(i=>hv.fiveRight?.[i]).map(i=>i.replace(/\(.*\)/,'')).join(', ')||'ยังไม่ติ๊ก'}
+    </span></div>`;
+  h+=`</div>`;
+
+  // === 4. ขับถ่าย + I/O ===
   const st=stoolTxt(lg.stool);
-  h+=`<div class="hv-sec"><div class="hv-sl">🚽 ขับถ่าย</div>
+  h+=`<div class="hv-sec"><div class="hv-sl">🚽 ขับถ่าย & น้ำ</div>
     <div class="hv-row"><span class="hv-lbl">อุจจาระ</span><span class="hv-val">${st||'ยังไม่บันทึก'}</span></div>
     <div class="hv-row"><span class="hv-lbl">ปัสสาวะ</span><span class="hv-val">${lg.urine||'ยังไม่บันทึก'}</span></div>
+    ${io.intake||io.output?`<div class="hv-row"><span class="hv-lbl">I/O</span><span class="hv-val">เข้า ${io.intake||0} ml / ออก ${io.output||0} ml → Balance <span style="color:${bal>=0?'var(--sky)':'var(--rose)'};font-weight:700">${bal>=0?'+':''}${bal} ml</span></span></div>`:''}
   </div>`;
 
-  // Intake / Output — optional
-  h+=`<div class="hv-sec"><div class="hv-sl">💧 Intake / Output น้ำ <span style="font-size:10px;font-weight:400;color:var(--muted)">(ไม่บังคับ)</span></div>
-    <div class="io-row">
-      <span class="io-lbl">Intake (น้ำเข้า)</span>
-      <input class="io-inp" type="number" placeholder="ml" value="${io.intake||''}" onchange="sHvIO(${p.id},'${sh}','intake',this.value)">
-      <span class="io-unit">ml</span>
-    </div>
-    <div class="io-row">
-      <span class="io-lbl">Output (ปัสสาวะ)</span>
-      <input class="io-inp" type="number" placeholder="ml" value="${io.output||''}" onchange="sHvIO(${p.id},'${sh}','output',this.value)">
-      <span class="io-unit">ml</span>
-    </div>
-    ${(io.intake||io.output)?`<div class="io-row">
-      <span class="io-lbl">Balance</span>
-      <span class="io-bal ${bal>=0?'io-pos':'io-neg'}" id="io-bal-${p.id}-${sh}">${(bal>=0?'+':'')+bal} ml</span>
-    </div>`:'<div style="font-size:11px;color:var(--muted);padding:3px 0">— ไม่บันทึก I/O สำหรับผู้สูงอายุรายนี้ —</div>'}
+  // === 5. ป้องกันความเสี่ยง ===
+  const allFall=RISK_FALL.every(i=>hv.riskFall?.[i]);
+  const allPneum=RISK_PNEUMONIA.every(i=>hv.riskPneumonia?.[i]);
+  const allUTI=RISK_UTI.every(i=>hv.riskUTI?.[i]);
+  h+=`<div class="hv-sec"><div class="hv-sl">⚠️ ความเสี่ยง & ป้องกัน</div>
+    <div class="hv-row"><span class="hv-lbl">พลัดตกหกล้ม</span><span class="hv-val" style="color:${allFall?'var(--green)':'var(--muted)'}">
+      ${allFall?'✅ ดำเนินการครบ':RISK_FALL.filter(i=>hv.riskFall?.[i]).length+'/'+RISK_FALL.length}</span></div>
+    <div class="hv-row"><span class="hv-lbl">ปอดติดเชื้อ</span><span class="hv-val" style="color:${allPneum?'var(--green)':'var(--muted)'}">
+      ${allPneum?'✅ ดำเนินการครบ':RISK_PNEUMONIA.filter(i=>hv.riskPneumonia?.[i]).length+'/'+RISK_PNEUMONIA.length}</span></div>
+    <div class="hv-row"><span class="hv-lbl">ติดเชื้อปัสสาวะ</span><span class="hv-val" style="color:${allUTI?'var(--green)':'var(--muted)'}">
+      ${allUTI?'✅ ดำเนินการครบ':RISK_UTI.filter(i=>hv.riskUTI?.[i]).length+'/'+RISK_UTI.length}</span></div>
   </div>`;
 
-  // Risk checklist
+  // === 6. นอนหลับ + ออกกำลังกาย ===
+  const sleepDone=SLEEP_ITEMS.filter(i=>hv.sleep?.[i]);
+  h+=`<div class="hv-sec"><div class="hv-sl">😴 นอนหลับ & ออกกำลังกาย</div>`;
+  if(sleepDone.length){
+    h+=`<div class="hv-row"><span class="hv-lbl">นอนหลับ</span><span class="hv-val">${sleepDone.join(', ')}</span></div>`;
+  } else {
+    h+=`<div class="hv-row"><span class="hv-lbl">นอนหลับ</span><span class="hv-val" style="color:var(--muted)">ยังไม่บันทึก</span></div>`;
+  }
+  if(sh==='D'){
+    const ptDone=lg.pt||{};
+    const PT_ALL=['หมุนวงล้อ','ปั่นจักรยาน','ยกห่วง','ดึงรอก','นั่งรถเข็น','กระตุ้นนั่งข้างเตียง','เคาะปอด','ฝึกพูด'];
+    const doneList=PT_ALL.filter(i=>ptDone[i]);
+    if(ptDone['เดินราวจับ'])doneList.push('เดินราวจับ '+ptDone['เดินราวจับ']+' รอบ');
+    h+=`<div class="hv-row"><span class="hv-lbl">กายภาพ</span><span class="hv-val">${doneList.length?doneList.join(', '):'<span style="color:var(--muted)">ยังไม่บันทึก</span>'}</span></div>`;
+    const actDone=lg.activities||{};
+    const doneAct=Object.keys(actDone).filter(k=>actDone[k]);
+    if(doneAct.length)h+=`<div class="hv-row"><span class="hv-lbl">กิจกรรม</span><span class="hv-val">${doneAct.join(', ')}</span></div>`;
+  }
+  h+=`</div>`;
+
+  // === 7. แผล ===
+  if((lg.wounds||[]).length){
+    h+=`<div class="hv-sec"><div class="hv-sl">🩹 แผลกดทับ</div>
+      <div class="hv-row"><span class="hv-lbl">ตำแหน่ง</span><span class="hv-val" style="color:var(--rose)">${lg.wounds.join(', ')}</span></div>
+      ${lg.woundNote?`<div class="hv-row"><span class="hv-lbl">การดูแล</span><span class="hv-val">${lg.woundNote}</span></div>`:''}
+    </div>`;
+  }
+
+  // === 8. หมายเหตุ ===
+  if(lg.note){
+    h+=`<div class="hv-sec"><div class="hv-sl">📝 ปัญหา / สังเกตการณ์</div>
+      <div style="background:var(--gold-l);border-radius:8px;padding:7px 10px;font-size:13px;color:var(--text);line-height:1.6;border:1px solid var(--gold)">${lg.note}</div>
+    </div>`;
+  }
+
+  // === Checklist interactive (collapsed section) ===
+  const chkOpen=oC['hvck_'+p.id];
+  h+=`<div style="margin-top:8px">
+    <button onclick="oC['hvck_'+${p.id}]=!oC['hvck_'+${p.id}];rHandover()" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;width:100%">
+      ${chkOpen?'▲ ซ่อน Checklist':'▼ เปิด Checklist ส่งเวร (บันทึกเพิ่มเติม)'}
+    </button>
+    ${chkOpen?rHvChecklist(p,sh,hv):''}
+  </div>`;
+
+  return h;
+}
+
+function rHvChecklist(p,sh,hv){
+  let h='<div style="margin-top:8px">';
+  // I/O inputs
+  const io=hv.io||{};
+  h+=`<div class="hv-sec" style="margin-top:8px"><div class="hv-sl">💧 Intake / Output <span style="font-size:10px;font-weight:400">(ไม่บังคับ)</span></div>
+    <div class="io-row"><span class="io-lbl">Intake</span><input class="io-inp" type="number" placeholder="ml" value="${io.intake||''}" onchange="sHvIO(${p.id},'${sh}','intake',this.value)"><span class="io-unit">ml</span></div>
+    <div class="io-row"><span class="io-lbl">Output</span><input class="io-inp" type="number" placeholder="ml" value="${io.output||''}" onchange="sHvIO(${p.id},'${sh}','output',this.value)"><span class="io-unit">ml</span></div>
+  </div>`;
+  // Risk checklists
   const risks=[
     {cat:'riskFall',title:'⚠️ ป้องกันพลัดตกหกล้ม',items:RISK_FALL,color:'var(--orange)'},
     {cat:'riskPneumonia',title:'🫁 ป้องกันปอดติดเชื้อ',items:RISK_PNEUMONIA,color:'var(--sky)'},
     {cat:'riskUTI',title:'💧 ป้องกันติดเชื้อทางเดินปัสสาวะ',items:RISK_UTI,color:'var(--teal)'},
   ];
-  h+=`<div class="hv-sec"><div class="hv-sl">✅ Checklist ความเสี่ยง</div>`;
   risks.forEach(risk=>{
-    const allDone=risk.items.every(item=>hv[risk.cat]?.[item]);
-    h+=`<div class="risk-box" style="border-color:${allDone?'var(--green)':risk.color}">
-      <div class="risk-title" style="color:${risk.color}">${risk.title} ${allDone?'<span style="color:var(--green);font-size:11px">✅ ครบ</span>':''}</div>
+    h+=`<div class="risk-box" style="margin-bottom:6px;border-color:${risk.color}">
+      <div class="risk-title" style="color:${risk.color}">${risk.title}</div>
       ${risk.items.map(item=>{
         const done=hv[risk.cat]?.[item]||false;
         return`<div class="risk-item"><div class="risk-ck ${done?'on':''}" onclick="tHvItem(${p.id},'${sh}','${risk.cat}','${item.replace(/'/g,"\\'")}')"></div><span>${item}</span></div>`;
       }).join('')}
     </div>`;
   });
-  h+=`</div>`;
-
   // Sleep
-  h+=`<div class="hv-sec"><div class="hv-sl">😴 การนอนหลับ</div>
-    <div class="risk-box">
-      ${SLEEP_ITEMS.map(item=>{
-        const done=hv.sleep?.[item]||false;
-        return`<div class="risk-item"><div class="risk-ck ${done?'on':''}" onclick="tHvItem(${p.id},'${sh}','sleep','${item.replace(/'/g,"\\'")}')"></div><span>${item}</span></div>`;
-      }).join('')}
-    </div>
+  h+=`<div class="risk-box" style="margin-bottom:6px;border-color:var(--purple)">
+    <div class="risk-title" style="color:var(--purple)">😴 การนอนหลับ</div>
+    ${SLEEP_ITEMS.map(item=>{
+      const done=hv.sleep?.[item]||false;
+      return`<div class="risk-item"><div class="risk-ck ${done?'on':''}" onclick="tHvItem(${p.id},'${sh}','sleep','${item.replace(/'/g,"\\'")}')"></div><span>${item}</span></div>`;
+    }).join('')}
   </div>`;
-
-  // Wounds if any
-  if((lg.wounds||[]).length){
-    h+=`<div class="hv-sec"><div class="hv-sl">🩹 แผล</div>
-      <div class="hv-row"><span class="hv-lbl">ตำแหน่ง</span><span class="hv-val">${lg.wounds.join(', ')}</span></div>
-      ${lg.woundNote?`<div class="hv-row"><span class="hv-lbl">รายละเอียด</span><span class="hv-val">${lg.woundNote}</span></div>`:''}
-    </div>`;
-  }
-
-  // Note
-  if(lg.note){h+=`<div class="hv-sec"><div class="hv-sl">📝 ปัญหาอื่นๆ</div>
-    <div style="font-size:13px;color:var(--text);line-height:1.6;background:var(--gold-l);border-radius:8px;padding:7px 10px;border:1px solid var(--gold)">${lg.note}</div>
-  </div>`;}
-
+  // 5 Right
+  h+=`<div class="risk-box" style="margin-bottom:6px;border-color:var(--green)">
+    <div class="risk-title" style="color:var(--green)">💊 5 Right</div>
+    ${FIVE_RIGHT.map(item=>{
+      const done=hv.fiveRight?.[item]||false;
+      return`<div class="risk-item"><div class="risk-ck ${done?'on':''}" onclick="tHvItem(${p.id},'${sh}','fiveRight','${item.replace(/'/g,"\\'")}')"></div><span>${item}</span></div>`;
+    }).join('')}
+  </div>`;
+  h+=`</div>`;
   return h;
 }
+
+function rHvBody(p,sh,lg,hv,v){return '';} // kept for compatibility
 
 function cModal(id){document.getElementById(id).classList.remove('open');}
 document.querySelectorAll('.overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
