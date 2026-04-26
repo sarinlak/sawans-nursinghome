@@ -1436,8 +1436,7 @@ function rPats(){
     const tasks=sh==='D'?(p.tasksD&&p.tasksD.length?p.tasksD:DEFAULT_TASKS_D):(p.tasksN&&p.tasksN.length?p.tasksN:DEFAULT_TASKS_N);
     const shMeds=getMedsForShift(p,sh);
     const tDone=tasks.filter(function(t){return lg.tasks&&lg.tasks[t];}).length;
-    const mealKeys=(sh==='D'?MEDS_D:MEDS_N).filter(function(meal){return shMeds.some(function(m){return m.meals.includes(meal);});});
-    const mDone=mealKeys.filter(function(meal){return lg.meds&&lg.meds['meal||'+meal];}).length;
+    const mDone=shMeds.filter(function(m){return lg.meds&&lg.meds['sh_med||'+m.name];}).length;
     const total=tasks.length+shMeds.length, done=tDone+mDone;
     const pct=total?Math.round(done/total*100):0;
     const R=13,C=2*Math.PI*R,O=C-(pct/100)*C;
@@ -1505,9 +1504,19 @@ function tCard(id){
 function sSh(pid,sh,e){if(e)e.stopPropagation();aSh[pid]=sh;rPats();}
 function sShEl(el,e){if(e)e.stopPropagation();sSh(el.dataset.pid,el.dataset.sh,null);}
 function tTask(pid,sh,t){const lg=eLog(pid,curDate,sh);if(!lg.tasks)lg.tasks={};lg.tasks[t]=!lg.tasks[t];save();rPats();}
-function tMedKey(pid,sh,key){const lg=eLog(pid,curDate,sh);if(!lg.meds)lg.meds={};lg.meds[key]=!lg.meds[key];save();rPats();}
+function tMedKey(pid,sh,key){const lg=eLog(pid,curDate,sh);if(!lg.meds)lg.meds={};lg.meds[key]=!lg.meds[key];save();
+  const cb=document.getElementById('cb-'+pid);
+  if(cb&&!cb.classList.contains('h')){const p=S.patients.find(x=>x.id===pid);if(p)cb.innerHTML=rShift(p,sh,eLog(pid,curDate,sh));}
+}
+function tMedMeal(pid,sh,medNames,allDone){
+  const lg=eLog(pid,curDate,sh);if(!lg.meds)lg.meds={};
+  medNames.forEach(function(name){lg.meds['sh_med||'+name]=!allDone;});
+  save();
+  const cb=document.getElementById('cb-'+pid);
+  if(cb&&!cb.classList.contains('h')){const p=S.patients.find(x=>x.id===pid);if(p)cb.innerHTML=rShift(p,sh,eLog(pid,curDate,sh));}
+}
 function sVit(pid,sh,f,v){const lg=eLog(pid,curDate,sh);if(!lg.v)lg.v={};lg.v[f]=v;save();if(f==='status')rPats();}
-function sBath(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.bath=lg.bath===v?null:v;save();rPats();}
+
 function tPT(pid,sh,item){const lg=eLog(pid,curDate,sh);if(!lg.pt)lg.pt={};lg.pt[item]=!lg.pt[item];save();rPats();}
 function sPTRounds(pid,sh,val){const lg=eLog(pid,curDate,sh);if(!lg.pt)lg.pt={};lg.pt['เดินราวจับ']=val?parseInt(val):null;save();}
 function tActivity(pid,sh,item){const lg=eLog(pid,curDate,sh);if(!lg.activities)lg.activities={};lg.activities[item]=!lg.activities[item];save();rPats();}
@@ -1575,7 +1584,7 @@ function rShift(p,sh,lg){
     ${[{k:'bp',l:'💉 BP',ph:'120/80'},{k:'temp',l:'🌡️ T°C',ph:'36.5'},{k:'hr',l:'💓 HR',ph:'72'},{k:'rr',l:'💨 RR',ph:'20'},{k:'o2',l:'🫁 O2%',ph:'98'},{k:'sugar',l:'🩸 น้ำตาล',ph:'100'}].map(f=>`
     <div class="vb">
       <div class="vbl">${f.l}</div>
-      <input class="vbi" placeholder="${f.ph}" value="${lg.v?.[f.k]||''}" onchange="sVSMain(${p.id},'${sh}','${f.k}',this.value)">
+      <input class="vbi" placeholder="${f.ph}" value="${lg.v?.[f.k]||''}" oninput="sVSMain(${p.id},'${sh}','${f.k}',this.value)" onblur="sVSMain(${p.id},'${sh}','${f.k}',this.value)">
     </div>`).join('')}
   </div>
   <div class="opts" style="margin-top:6px">
@@ -1602,7 +1611,7 @@ function rShift(p,sh,lg){
         ${[{k:'bp',l:'BP',ph:'120/80'},{k:'temp',l:'T°C',ph:'36.5'},{k:'hr',l:'HR',ph:'72'},{k:'rr',l:'RR',ph:'20'},{k:'o2',l:'O2%',ph:'96'}].map(row=>`<tr>
           <td style="padding:4px 7px;border:1px solid var(--border);font-weight:600;background:var(--bg);white-space:nowrap">${row.l}</td>
           ${myVSTimes.map(t=>{const vsd=(lg.vsData||{})[t]||{};return`<td style="padding:2px;border:1px solid var(--border);text-align:center">
-            <input style="width:100%;border:none;background:transparent;font-size:12px;text-align:center;outline:none;padding:2px" placeholder="${row.ph}" value="${vsd[row.k]||''}" onchange="sVS(${p.id},'${sh}','${t}','${row.k}',this.value)">
+            <input style="width:100%;border:none;background:transparent;font-size:12px;text-align:center;outline:none;padding:2px" placeholder="${row.ph}" value="${vsd[row.k]||''}" oninput="sVS(${p.id},'${sh}','${t}','${row.k}',this.value)" onblur="sVS(${p.id},'${sh}','${t}','${row.k}',this.value)">
           </td>`;}).join('')}
         </tr>`).join('')}
       </tbody></table></div>
@@ -1654,21 +1663,31 @@ function rShift(p,sh,lg){
     mealOrder.forEach(meal=>{
       const medsForMeal=shMeds.filter(m=>m.meals.includes(meal));
       if(!medsForMeal.length)return;
-      const key='meal||'+meal;
-      const done=lg.meds?.[key]||false;
+      // ใช้ key ตามชื่อยา (sh_med||name) เพื่อรองรับข้อมูลเก่า
+      // มื้อนี้ "ครบ" = ยาทุกตัวในมื้อนี้ถูกติ๊กหมดแล้ว
+      const allDone=medsForMeal.every(med=>lg.meds?.['sh_med||'+med.name]);
+      const anyDone=medsForMeal.some(med=>lg.meds?.['sh_med||'+med.name]);
       const medLines=medsForMeal.map(med=>{
+        const key='sh_med||'+med.name;
+        const done=lg.meds?.[key]||false;
         const q=(med.qtyPerMeal||{})[meal]||med.qty||'';
         const unit=med.method==='drop'?'หยอด':med.method==='inject'||med.method==='insulin'?'ครั้ง':'เม็ด';
         const eye=(med.method==='drop'&&med.eyeSide)?' 👁️'+med.eyeSide:'';
-        return`<span style="font-size:12px;margin-right:8px">${med.name}${q?` <strong style="color:var(--sky)">${q}${unit}</strong>`:''}${eye}</span>`;
+        return`<div class="ci" style="padding:4px 0;border-bottom:1px solid var(--border)">
+          <div class="ck ${done?'on':''}" style="width:20px;height:20px" onclick="tMedKey(${p.id},'${sh}','${key.replace(/'/g,"\'")}')"></div>
+          <div style="flex:1;font-size:12px">${med.name}${q?` <strong style="color:var(--sky)">${q}${unit}</strong>`:''}${eye}</div>
+          <span style="font-size:11px;color:${done?'var(--green)':'var(--muted)'}">${done?'✅':'⬜'}</span>
+        </div>`;
       }).join('');
-      h+=`<div class="ci" style="align-items:center;background:${done?'var(--green-l)':'#fff'};border-radius:9px;padding:8px 10px;margin-bottom:5px;border:1.5px solid ${done?'var(--green)':'var(--border)'}">
-        <div class="ck ${done?'on':''}" onclick="tMedKey(${p.id},'${sh}','${key.replace(/'/g,"\'")}')"></div>
-        <div style="flex:1">
-          <div style="font-size:12px;font-weight:700;color:var(--sky);margin-bottom:3px">🕐 ${meal}</div>
-          <div>${medLines}</div>
+      h+=`<div style="background:${allDone?'var(--green-l)':'#fff'};border-radius:9px;padding:8px 10px;margin-bottom:6px;border:1.5px solid ${allDone?'var(--green)':'var(--border)'}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div style="font-size:12px;font-weight:700;color:var(--sky)">🕐 ${meal}</div>
+          <button onclick="tMedMeal(${p.id},'${sh}',${JSON.stringify(medsForMeal.map(m=>m.name))},${allDone})"
+            style="padding:4px 12px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:${allDone?'var(--green)':'var(--sky)'};color:#fff">
+            ${allDone?'✅ ครบแล้ว':'ติ๊กทั้งมื้อ ☝️'}
+          </button>
         </div>
-        <span style="font-size:13px;font-weight:700;color:${done?'var(--green)':'var(--muted)'}"> ${done?'✅':'⬜'}</span>
+        ${medLines}
       </div>`;
     });
   }
@@ -1975,7 +1994,7 @@ function delP(pid){
 function uSum(){
   document.getElementById('st').textContent=S.patients.length;
   let d=0,pn=0;
-  S.patients.forEach(p=>{['D','N'].forEach(sh=>{const lg=gLog(p.id,curDate,sh);(sh==='D'?p.tasksD||[]:p.tasksN||[]).forEach(t=>{lg.tasks?.[t]?d++:pn++;});(function(){const ml=sh==='D'?MEDS_D:MEDS_N;ml.forEach(meal=>{if(getMedsForShift(p,sh).some(m=>m.meals.includes(meal))){lg.meds?.['meal||'+meal]?d++:pn++;}});})();});});
+  S.patients.forEach(p=>{['D','N'].forEach(sh=>{const lg=gLog(p.id,curDate,sh);(sh==='D'?p.tasksD||[]:p.tasksN||[]).forEach(t=>{lg.tasks?.[t]?d++:pn++;});getMedsForShift(p,sh).forEach(med=>{const k='sh_med||'+med.name;lg.meds?.[k]?d++:pn++;});});});
   document.getElementById('sd').textContent=d;document.getElementById('sp').textContent=pn;
 }
 
@@ -2477,10 +2496,8 @@ function buildRepText(){
       // MEDS — family sees only "ครบ/ไม่ครบ"
       const shMeds=getMedsForShift(p,sh);
       if(shMeds.length){
-        const mealOrder2=sh==='D'?MEDS_D:MEDS_N;
-        const mealsWithMeds=mealOrder2.filter(meal=>shMeds.some(m=>m.meals.includes(meal)));
-        const totalMed=mealsWithMeds.length;
-        const doneMed=mealsWithMeds.filter(meal=>lg.meds?.['meal||'+meal]).length;
+        const totalMed=shMeds.length;
+        const doneMed=shMeds.filter(m=>lg.meds?.['sh_med||'+m.name]).length;
         if(totalMed>0){
           if(doneMed===totalMed)rep+=`💊 ยา: ให้ยาครบแล้ว ✅\n`;
         }
