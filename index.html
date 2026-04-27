@@ -712,6 +712,7 @@ const DEFAULT_TASKS_D=[
   'บริหารลิ้นหลังอาหารเช้า',
   'อาหารกลางวัน',
   'ออกกำลังกายท่านั่ง 40 นาที',
+  'กายภาพโดยนักกายภาพบำบัด',
   'อาบน้ำ/เช็ดตัวรอบบ่าย',
   'เช็ดหัวเตียง',
   'เติมน้ำในเหยือก',
@@ -1434,7 +1435,10 @@ function rPats(){
     const lg=gLog(p.id,curDate,sh);
     const isOpen=oC[p.id]||false; // default ปิด
     const ini=p.name.replace(/คุณ|นาย|นาง|นางสาว/g,'').trim().charAt(0)||'?';
-    const tasks=sh==='D'?(p.tasksD&&p.tasksD.length?p.tasksD:DEFAULT_TASKS_D):(p.tasksN&&p.tasksN.length?p.tasksN:DEFAULT_TASKS_N);
+    const defaultT=sh==='D'?DEFAULT_TASKS_D:DEFAULT_TASKS_N;
+  const customT=sh==='D'?(p.tasksD||[]):(p.tasksN||[]);
+  // รวม custom tasks กับ default — เพิ่มรายการใหม่ที่ยังไม่มีในรายการของผู้สูงอายุคนนี้
+  const tasks=customT.length?[...customT,...defaultT.filter(t=>!customT.includes(t))]:defaultT;
     const shMeds=getMedsForShift(p,sh);
     const tDone=tasks.filter(function(t){return lg.tasks&&lg.tasks[t];}).length;
     const mDone=shMeds.filter(function(m){return lg.meds&&lg.meds['sh_med||'+m.name];}).length;
@@ -1589,7 +1593,10 @@ function toggleParrot(pid,sh){
 // ============================================================
 function rShift(p,sh,lg){
   let h='';
-  const tasks=sh==='D'?(p.tasksD&&p.tasksD.length?p.tasksD:DEFAULT_TASKS_D):(p.tasksN&&p.tasksN.length?p.tasksN:DEFAULT_TASKS_N);
+  const defaultT=sh==='D'?DEFAULT_TASKS_D:DEFAULT_TASKS_N;
+  const customT=sh==='D'?(p.tasksD||[]):(p.tasksN||[]);
+  // รวม custom tasks กับ default — เพิ่มรายการใหม่ที่ยังไม่มีในรายการของผู้สูงอายุคนนี้
+  const tasks=customT.length?[...customT,...defaultT.filter(t=>!customT.includes(t))]:defaultT;
 
   // ADL + emergency info
   if(p.adl&&p.adl.score!==undefined){
