@@ -1605,7 +1605,18 @@ function sStoolF(pid,sh,f,v){const lg=eLog(pid,curDate,sh);if(typeof lg.stool!==
 function sUrine(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.urine=lg.urine===v?null:v;save();rPats();}
 function sNote(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.note=v;save();}
 function sCaution(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.caution=v;save();}
-function sVSMain(pid,sh,field,val){const lg=eLog(pid,curDate,sh);if(!lg.v)lg.v={};lg.v[field]=val;save();}
+// debounce timers for VS inputs
+const vsTimers={};
+function sVSDebounce(pid,sh,field,val){
+  const lg=eLog(pid,curDate,sh);if(!lg.v)lg.v={};lg.v[field]=val;
+  // save local immediately
+  try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
+  // push Firebase after 800ms of no typing
+  const key='vs_'+pid+'_'+sh+'_'+field;
+  clearTimeout(vsTimers[key]);
+  vsTimers[key]=setTimeout(function(){save();},800);
+}
+function sVSMain(pid,sh,field,val){sVSDebounce(pid,sh,field,val);}
 function sVSStatus(pid,sh,val){const lg=eLog(pid,curDate,sh);if(!lg.v)lg.v={};lg.v.status=lg.v.status===val?null:val;save();rPats();}
 function sWoundNote(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.woundNote=v;save();}
 function toggleParrot(pid,sh){
@@ -1663,7 +1674,7 @@ function rShift(p,sh,lg){
     ${[{k:'bp',l:'💉 BP',ph:'120/80'},{k:'temp',l:'🌡️ T°C',ph:'36.5'},{k:'hr',l:'💓 HR',ph:'72'},{k:'rr',l:'💨 RR',ph:'20'},{k:'o2',l:'🫁 O2%',ph:'98'},{k:'sugar',l:'🩸 น้ำตาล',ph:'100'}].map(f=>`
     <div class="vb">
       <div class="vbl">${f.l}</div>
-      <input class="vbi" placeholder="${f.ph}" value="${lg.v?.[f.k]||''}" oninput="sVSMain(${p.id},'${sh}','${f.k}',this.value)" onblur="sVSMain(${p.id},'${sh}','${f.k}',this.value)">
+      <input class="vbi" placeholder="${f.ph}" value="${lg.v?.[f.k]||''}" oninput="sVSMain(${p.id},'${sh}','${f.k}',this.value)">
     </div>`).join('')}
   </div>
   <div class="opts" style="margin-top:6px">
@@ -1690,7 +1701,7 @@ function rShift(p,sh,lg){
         ${[{k:'bp',l:'BP',ph:'120/80'},{k:'temp',l:'T°C',ph:'36.5'},{k:'hr',l:'HR',ph:'72'},{k:'rr',l:'RR',ph:'20'},{k:'o2',l:'O2%',ph:'96'}].map(row=>`<tr>
           <td style="padding:4px 7px;border:1px solid var(--border);font-weight:600;background:var(--bg);white-space:nowrap">${row.l}</td>
           ${myVSTimes.map(t=>{const vsd=(lg.vsData||{})[t]||{};return`<td style="padding:2px;border:1px solid var(--border);text-align:center">
-            <input style="width:100%;border:none;background:transparent;font-size:12px;text-align:center;outline:none;padding:2px" placeholder="${row.ph}" value="${vsd[row.k]||''}" oninput="sVS(${p.id},'${sh}','${t}','${row.k}',this.value)" onblur="sVS(${p.id},'${sh}','${t}','${row.k}',this.value)">
+            <input style="width:100%;border:none;background:transparent;font-size:12px;text-align:center;outline:none;padding:2px" placeholder="${row.ph}" value="${vsd[row.k]||''}" oninput="sVS(${p.id},'${sh}','${t}','${row.k}',this.value)">
           </td>`;}).join('')}
         </tr>`).join('')}
       </tbody></table></div>
@@ -1877,7 +1888,12 @@ function rShift(p,sh,lg){
   return h;
 }
 
-function sVS(pid,sh,time,field,val){const lg=eLog(pid,curDate,sh);if(!lg.vsData)lg.vsData={};if(!lg.vsData[time])lg.vsData[time]={};lg.vsData[time][field]=val;save();
+function sVS(pid,sh,time,field,val){
+  const lg=eLog(pid,curDate,sh);if(!lg.vsData)lg.vsData={};if(!lg.vsData[time])lg.vsData[time]={};lg.vsData[time][field]=val;
+  try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
+  const key='vs_'+pid+'_'+sh+'_'+time+'_'+field;
+  clearTimeout(vsTimers[key]);
+  vsTimers[key]=setTimeout(function(){save();},800);
   const chartEl=document.getElementById(`vs-chart-${pid}-${sh}`);
   if(chartEl){const curLg=gLog(pid,curDate,sh);chartEl.outerHTML=rVSChart(pid,sh,curLg);}
 }
