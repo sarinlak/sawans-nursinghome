@@ -731,7 +731,7 @@ const DEFAULT_TASKS_N=[
 const MEAL_TIMES=['ก่อนอาหารเช้า','หลังอาหารเช้า','ก่อนอาหารเที่ยง','หลังอาหารเที่ยง','ก่อนอาหารเย็น','หลังอาหารเย็น','ก่อนนอน'];
 const MEDS_D=['หลังอาหารเช้า','ก่อนอาหารเที่ยง','หลังอาหารเที่ยง','ก่อนอาหารเย็น'];
 const MEDS_N=['ก่อนอาหารเช้า','หลังอาหารเย็น','ก่อนนอน'];
-const VS_TIMES=['02:00','06:00','10:00','14:00','18:00','22:00'];
+const VS_TIMES=['10:00','14:00','18:00','22:00','02:00','06:00'];
 const MED_METHODS=[
   {k:'eat',l:'กิน',cls:'mb-eat'},{k:'drop',l:'หยอด',cls:'mb-drop'},
   {k:'apply',l:'ทา',cls:'mb-apply'},{k:'inject',l:'ฉีด',cls:'mb-inject'},
@@ -805,7 +805,9 @@ const ADL_QS=[
 ];
 
 let S={patients:[],acts:[],photos:[],logs:{},supplyLogs:{}};
-try{const x=localStorage.getItem(DK);if(x)S=JSON.parse(x);}catch(e){}
+try{const x=localStorage.getItem(DK);if(x){const d=JSON.parse(x);S={...S,...d};}}catch(e){}
+// โหลดรูปจาก storage แยก
+try{const ph=localStorage.getItem(DK+'_photos');if(ph)S.photos=JSON.parse(ph);}catch(e){}
 
 // ---- Firebase state ----
 let db=null,fbUnsubscribe=null,fbSyncTimer=null,fbLastSave=0,fbIsRemoteUpdate=false;
@@ -813,46 +815,54 @@ const FB_CFG_KEY='sawanNH_fbConfig';
 
 // ---- SAVE — always local first, then Firebase debounced ----
 const save=()=>{
-  // แยกบันทึก logs (งานดูแลรายวัน) และ photos แยกกัน
-  // logs บันทึกก่อนเสมอ ไม่ให้รูปทำให้ข้อมูลงานหาย
   try{
     const {photos,...dataNoPhotos}=S;
     localStorage.setItem(DK,JSON.stringify(dataNoPhotos));
   }catch(e){
-    // ถ้า localStorage เต็ม ลองลบ photos แล้ว save ใหม่
     try{
       const {photos,...dataNoPhotos}=S;
-      localStorage.removeItem(DK+'_photos'); // ลบรูปเก่า
+      localStorage.removeItem(DK+'_photos');
       localStorage.setItem(DK,JSON.stringify(dataNoPhotos));
       toast('⚠️ พื้นที่เต็ม ลบรูปอัตโนมัติแล้ว — ข้อมูลงานบันทึกแล้ว');
-    }catch(e2){
-      toast('❌ บันทึกไม่ได้ กรุณา Export ข้อมูลก่อน');
-    }
+    }catch(e2){toast('❌ บันทึกไม่ได้ กรุณา Export ข้อมูลก่อน');}
   }
-  // บันทึก photos แยก (ถ้าล้มเหลวไม่กระทบข้อมูลงาน)
+  // บันทึกรูปแยก
   if(S.photos&&S.photos.length){
     try{localStorage.setItem(DK+'_photos',JSON.stringify(S.photos));}catch(e){}
   }
-  // Firebase push
-  if(db){
-    clearTimeout(fbSyncTimer);
-    fbSyncTimer=setTimeout(()=>pushToFirebase(),300);
-  }
+  if(db){clearTimeout(fbSyncTimer);fbSyncTimer=setTimeout(()=>pushToFirebase(),300);}
 };
 
 function pushToFirebase(){
   if(!db)return;
   const{photos,...dataNoPhotos}=S;
   showSyncStatus('⏳ กำลังซิงค์...');
-  // ใช้ merge:true เพื่อไม่ให้ทับข้อมูลคนอื่น
-  db.collection('nhData').doc('main').set(dataNoPhotos,{merge:true})
-    .then(()=>{
-      fbLastSave=Date.now();
-      showSyncStatus('✅ ซิงค์ '+new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}));
-      const chunks=[];for(let i=0;i<photos.length;i+=5)chunks.push(photos.slice(i,i+5));
-      if(chunks.length)Promise.all(chunks.map((ch,i)=>db.collection('nhData').doc('photos_'+i).set({photos:ch,chunk:i}))).catch(()=>{});
-    })
-    .catch(err=>{showSyncStatus('⚠️ ซิงค์ไม่ได้: '+(err.code||err.message));});
+
+  // ใช้ transaction เพื่อป้องกันข้อมูลหายเวลาหลายคนใช้พร้อมกัน
+  const ref=db.collection('nhData').doc('main');
+  db.runTransaction(function(tx){
+    return tx.get(ref).then(function(doc){
+      if(!doc.exists){
+        tx.set(ref,dataNoPhotos);
+      } else {
+        // merge logs และ supplyLogs แบบ deep — ไม่ทับข้อมูลคนอื่น
+        const remote=doc.data();
+        const merged=deepMerge(remote,dataNoPhotos);
+        tx.set(ref,merged);
+      }
+    });
+  }).then(function(){
+    fbLastSave=Date.now();
+    showSyncStatus('✅ ซิงค์ '+new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}));
+    // save photos แยก
+    const chunks=[];for(let i=0;i<photos.length;i+=5)chunks.push(photos.slice(i,i+5));
+    if(chunks.length)Promise.all(chunks.map((ch,i)=>db.collection('nhData').doc('photos_'+i).set({photos:ch,chunk:i}))).catch(()=>{});
+  }).catch(function(err){
+    // transaction fail → fallback ใช้ set merge
+    ref.set(dataNoPhotos,{merge:true})
+      .then(function(){fbLastSave=Date.now();showSyncStatus('✅ ซิงค์แล้ว');})
+      .catch(function(e){showSyncStatus('⚠️ ซิงค์ไม่ได้: '+(e.code||e.message));});
+  });
 }
 
 function showSyncStatus(msg){
@@ -910,17 +920,13 @@ function initFirebase(cfg){
 
 // Deep merge: remote wins for scalars, but local wins for arrays/objects that are newer
 function deepMerge(local,remote){
-  // ถ้า remote ไม่ใช่ object → เอา remote
-  if(typeof remote!=='object'||remote===null)return remote;
-  if(typeof local!=='object'||local===null)return remote;
-
-  // Array (patients, acts) → เอาอันที่ยาวกว่า
+  if(remote===null||remote===undefined)return local;
+  if(local===null||local===undefined)return remote;
+  if(typeof remote!=='object')return remote!==null&&remote!==undefined?remote:local;
   if(Array.isArray(remote)){
     if(Array.isArray(local)&&local.length>=remote.length)return local;
     return remote;
   }
-
-  // Object → รวมทุก key จากทั้งสอง
   const result={...local};
   for(const key of Object.keys(remote)){
     if(!(key in local)){
@@ -931,9 +937,11 @@ function deepMerge(local,remote){
       if(Array.isArray(local[key])&&local[key].length>=remote[key].length)result[key]=local[key];
       else result[key]=remote[key];
     } else {
-      // Primitive — ถ้า local มีค่าและ remote เป็น null/undefined → เก็บ local
-      if(remote[key]===null||remote[key]===undefined)result[key]=local[key];
-      else result[key]=remote[key];
+      // ถ้า local มีค่า (ไม่ใช่ null/undefined/'') → เก็บ local
+      // เพราะ local คือข้อมูลที่เพิ่งกรอกใหม่
+      const lv=local[key], rv=remote[key];
+      if(lv!==null&&lv!==undefined&&lv!=='')result[key]=lv;
+      else result[key]=rv;
     }
   }
   return result;
@@ -1820,26 +1828,28 @@ function sVS(pid,sh,time,field,val){const lg=eLog(pid,curDate,sh);if(!lg.vsData)
 }
 
 function rVSChart(pid,sh,lg){
-  // ฟอร์มปรอทแบบมาตรฐาน: แกน Y ซ้าย = T°F + °C, แกน Y ขวา = Pulse
-  // แกน X = เวลา 2,6,10,14,18,22
   const W=360,H=240,PL=54,PR=46,PT=14,PB=28;
   const CW=W-PL-PR, CH=H-PT-PB;
   const n=VS_TIMES.length;
   const xStep=CW/(n-1);
-
-  // Temperature scale: 35°C (95°F) ถึง 41°C (105.8°F)
   const T_MIN=35, T_MAX=41, T_RANGE=T_MAX-T_MIN;
-  // Pulse scale: 40 ถึง 160
   const P_MIN=40, P_MAX=200, P_RANGE=P_MAX-P_MIN;
 
   function mapT(c){return c!=null?PT+CH-((c-T_MIN)/T_RANGE)*CH:null;}
   function mapP(v){return v!=null?PT+CH-((v-P_MIN)/P_RANGE)*CH:null;}
   function xi(i){return PL+i*xStep;}
 
-  // Collect data points
+  // รวมข้อมูลจากทั้ง D (10:00,14:00) และ N (18:00,22:00,02:00,06:00)
+  // ทั้งสอง shift บันทึกในวันเดียวกัน (curDate)
+  const lgD=gLog(pid,curDate,'D');
+  const lgN=gLog(pid,curDate,'N');
+  const VS_SHIFT_D_set=new Set(['10:00','14:00']);
+  const VS_SHIFT_N_set=new Set(['18:00','22:00','02:00','06:00']);
+
   const temps=[],hrs=[],bpSys=[],bpDia=[],rrs=[],o2s=[];
   VS_TIMES.forEach(function(t){
-    const vsd=lg.vsData?.[t]||{};
+    const useLgN=VS_SHIFT_N_set.has(t);
+    const vsd=(useLgN?lgN:lgD).vsData?.[t]||{};
     temps.push(vsd.temp?parseFloat(vsd.temp):null);
     hrs.push(vsd.hr?parseFloat(vsd.hr):null);
     if(vsd.bp){const p=vsd.bp.split('/');bpSys.push(parseFloat(p[0])||null);bpDia.push(parseFloat(p[1])||null);}
@@ -2932,17 +2942,17 @@ function rHandover(){
       if(!a.date)return;
       const diff=daysDiff(a.date,tday());
       if(diff>=0&&diff<=7)apptAlerts.push({p,a,diff});
-      else if(diff<0&&diff>=-3)apptAlerts.push({p,a,diff,overdue:true});
     });
   });
   if(apptAlerts.length){
-    html2+='<div class="alert-group"><div class="alert-title">🗓️ นัดพบแพทย์ (ภายใน 7 วัน)</div>';
+    apptAlerts.sort(function(a,b){return a.diff-b.diff;});
+    html2+='<div class="alert-group"><div class="alert-title">🗓️ นัดพบแพทย์</div>';
     apptAlerts.forEach(function(item){
       const col=item.overdue?'var(--rose)':item.diff===0?'var(--orange)':'var(--purple)';
+      const label=item.overdue?'⚠️ เกินกำหนด '+Math.abs(item.diff)+' วัน — ยังไม่ได้ลบนัด':item.diff===0?'🏥 วันนี้':'🗓️ อีก '+item.diff+' วัน';
       html2+='<div class="alert-row" style="border-left:3px solid '+col+'">'
         +'<span class="alert-name">'+item.p.name+(item.p.room?' ('+item.p.room+')':'')+'</span>'
-        +'<span style="font-size:12px;color:'+col+';font-weight:600">'
-        +(item.overdue?'⚠️ เกิน '+Math.abs(item.diff)+' วัน':item.diff===0?'🏥 วันนี้':'🗓️ อีก '+item.diff+' วัน')+'</span>'
+        +'<span style="font-size:12px;color:'+col+';font-weight:600">'+label+'</span>'
         +(item.a.doctor?'<span style="font-size:11px;color:var(--muted)"> — '+item.a.doctor+'</span>':'')
         +'</div>';
     });
