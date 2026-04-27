@@ -841,33 +841,45 @@ function pushToFirebase(){
   if(!db)return;
   const{photos,...dataNoPhotos}=S;
   showSyncStatus('⏳ กำลังซิงค์...');
-
-  // ใช้ transaction เพื่อป้องกันข้อมูลหายเวลาหลายคนใช้พร้อมกัน
   const ref=db.collection('nhData').doc('main');
   db.runTransaction(function(tx){
     return tx.get(ref).then(function(doc){
-      if(!doc.exists){
-        tx.set(ref,dataNoPhotos);
-      } else {
-        // merge logs และ supplyLogs แบบ deep — ไม่ทับข้อมูลคนอื่น
-        const remote=doc.data();
-        const merged=deepMerge(remote,dataNoPhotos);
-        tx.set(ref,merged);
-      }
+      if(!doc.exists){tx.set(ref,dataNoPhotos);return;}
+      const remote=doc.data();
+      const merged=deepMergeSafe(remote,dataNoPhotos);
+      tx.set(ref,merged);
     });
   }).then(function(){
     fbLastSave=Date.now();
     showSyncStatus('✅ ซิงค์ '+new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}));
-    // save photos แยก
     const chunks=[];for(let i=0;i<photos.length;i+=5)chunks.push(photos.slice(i,i+5));
     if(chunks.length)Promise.all(chunks.map((ch,i)=>db.collection('nhData').doc('photos_'+i).set({photos:ch,chunk:i}))).catch(()=>{});
   }).catch(function(err){
-    // transaction fail → fallback ใช้ set merge
     ref.set(dataNoPhotos,{merge:true})
       .then(function(){fbLastSave=Date.now();showSyncStatus('✅ ซิงค์แล้ว');})
       .catch(function(e){showSyncStatus('⚠️ ซิงค์ไม่ได้: '+(e.code||e.message));});
   });
 }
+
+function deepMergeSafe(base,overlay){
+  if(overlay===null||overlay===undefined)return base;
+  if(base===null||base===undefined)return overlay;
+  if(typeof overlay!=='object'||Array.isArray(overlay)){
+    // ค่า primitive: overlay ชนะถ้ามีค่า (ไม่ใช่ null/undefined/'')
+    if(overlay!==null&&overlay!==undefined&&overlay!=='')return overlay;
+    if(base!==null&&base!==undefined&&base!=='')return base;
+    return overlay;
+  }
+  const result={};
+  const keys=new Set([...Object.keys(base||{}),...Object.keys(overlay)]);
+  keys.forEach(function(k){
+    if(!(k in base))result[k]=overlay[k];
+    else if(!(k in overlay))result[k]=base[k];
+    else result[k]=deepMergeSafe(base[k],overlay[k]);
+  });
+  return result;
+}
+
 
 function showSyncStatus(msg){
   const el=document.getElementById('syncMsg');const bar=document.getElementById('syncBar');
