@@ -817,7 +817,8 @@ const FB_CFG_KEY='sawanNH_fbConfig';
 
 // ---- SAVE — always local first, then Firebase debounced ----
 const save=()=>{
-  lastEditTime=Date.now(); // บันทึกเวลาที่มีการแก้ไข
+  lastEditTime=Date.now();
+  S._savedAt=Date.now(); // timestamp ของ save ล่าสุด
   try{
     const {photos,...dataNoPhotos}=S;
     localStorage.setItem(DK,JSON.stringify(dataNoPhotos));
@@ -896,29 +897,34 @@ function initFirebase(cfg){
 
     if(fbUnsubscribe)fbUnsubscribe();
     fbUnsubscribe=db.collection('nhData').doc('main').onSnapshot({includeMetadataChanges:false},snap=>{
-      // ถ้าเพิ่งเซฟไปเอง < 5 วิ ไม่รับข้อมูลกลับ (ป้องกัน echo)
       if(Date.now()-fbLastSave<5000)return;
-      // ถ้าเพิ่งกรอกข้อมูล < 10 วิ ไม่ update (ป้องกันข้อมูลหาย)
-      if(Date.now()-lastEditTime<10000){
-        showSyncStatus('☁️ มีข้อมูลใหม่ (รอกรอกเสร็จ...)');
-        return;
-      }
       if(!snap.exists){pushToFirebase();showSyncStatus('☁️ อัปโหลดข้อมูลครั้งแรก...');return;}
       const remote=snap.data();
-      // Deep merge — เอาข้อมูลจาก remote แต่ไม่ทับ local ที่มีค่าอยู่แล้ว
-      const merged=deepMerge(remote,S); // S เป็น local (ของเรา) ควร override remote
+
+      // เปรียบเทียบ timestamp — ใครบันทึกล่าสุดชนะ
+      const remoteSavedAt=remote._savedAt||0;
+      const localSavedAt=S._savedAt||0;
+
+      let merged;
+      if(remoteSavedAt>localSavedAt){
+        // remote ใหม่กว่า — เอา remote เป็นหลัก แต่รักษา logs ของ card ที่เปิดอยู่
+        merged=deepMerge(S,remote);
+        // ถ้ากำลังเปิด card อยู่ ไม่แตะ logs ของ pid นั้น
+        if(Date.now()-lastEditTime<10000){
+          Object.keys(oC).filter(k=>oC[k]).forEach(function(pid){
+            if(S.logs[pid])merged.logs[pid]=S.logs[pid];
+          });
+        }
+      } else {
+        // local ใหม่กว่า หรือ เท่ากัน — merge แต่ local wins
+        merged=deepMerge(remote,S);
+      }
+
       S=merged;
       try{localStorage.setItem(DK,JSON.stringify(S));}catch(e){}
-      // re-render เฉพาะส่วนที่ไม่ได้เปิดอยู่ — ไม่ re-render card ที่กำลังกรอก
       const openCards=Object.keys(oC).filter(k=>oC[k]);
-      if(openCards.length===0){
-        renderAll();
-      } else {
-        // re-render เฉพาะส่วนที่ปลอดภัย
-        rWarn();rApptAlerts();uSum();rHandover();
-        // re-render patient list แต่ไม่ล้าง open cards
-        rPatsHeader();
-      }
+      if(openCards.length===0){renderAll();}
+      else{rWarn();rApptAlerts();uSum();rHandover();rPatsHeader();}
       showSyncStatus('☁️ ซิงค์แล้ว — realtime');
     },err=>{showSyncStatus('❌ '+err.message);});
 
@@ -937,31 +943,32 @@ function initFirebase(cfg){
 }
 
 // Deep merge: remote wins for scalars, but local wins for arrays/objects that are newer
-function deepMerge(local,remote){
-  if(remote===null||remote===undefined)return local;
-  if(local===null||local===undefined)return remote;
-  if(typeof remote!=='object')return remote!==null&&remote!==undefined?remote:local;
-  if(Array.isArray(remote)){
-    if(Array.isArray(local)&&local.length>=remote.length)return local;
-    return remote;
+function deepMerge(base,overlay){
+  // base = ข้อมูลเก่า, overlay = ข้อมูลใหม่กว่า
+  // สำหรับ logs: overlay wins เพราะเป็นข้อมูลที่ save ล่าสุด
+  if(overlay===null||overlay===undefined)return base;
+  if(base===null||base===undefined)return overlay;
+  if(typeof overlay!=='object')return overlay;
+  if(Array.isArray(overlay)){
+    // patients/acts: เอาอันที่ยาวกว่า
+    if(Array.isArray(base)&&base.length>overlay.length)return base;
+    return overlay;
   }
-  const result={...local};
-  for(const key of Object.keys(remote)){
-    if(!(key in local)){
-      result[key]=remote[key];
-    } else if(typeof remote[key]==='object'&&remote[key]!==null&&!Array.isArray(remote[key])){
-      result[key]=deepMerge(local[key],remote[key]);
-    } else if(Array.isArray(remote[key])){
-      if(Array.isArray(local[key])&&local[key].length>=remote[key].length)result[key]=local[key];
-      else result[key]=remote[key];
+  const result={};
+  // รวม keys จากทั้งสอง
+  const keys=new Set([...Object.keys(base),...Object.keys(overlay)]);
+  keys.forEach(function(k){
+    if(!(k in overlay))result[k]=base[k];
+    else if(!(k in base))result[k]=overlay[k];
+    else if(typeof overlay[k]==='object'&&overlay[k]!==null&&!Array.isArray(overlay[k])){
+      result[k]=deepMerge(base[k],overlay[k]);
+    } else if(Array.isArray(overlay[k])){
+      result[k]=(Array.isArray(base[k])&&base[k].length>overlay[k].length)?base[k]:overlay[k];
     } else {
-      // ถ้า local มีค่า (ไม่ใช่ null/undefined/'') → เก็บ local
-      // เพราะ local คือข้อมูลที่เพิ่งกรอกใหม่
-      const lv=local[key], rv=remote[key];
-      if(lv!==null&&lv!==undefined&&lv!=='')result[key]=lv;
-      else result[key]=rv;
+      // primitive: overlay wins ถ้ามีค่า, ไม่อย่างนั้นเก็บ base
+      result[k]=(overlay[k]!==null&&overlay[k]!==undefined&&overlay[k]!=='')?overlay[k]:base[k];
     }
-  }
+  });
   return result;
 }
 
