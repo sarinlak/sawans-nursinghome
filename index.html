@@ -901,30 +901,31 @@ function initFirebase(cfg){
       if(!snap.exists){pushToFirebase();showSyncStatus('☁️ อัปโหลดข้อมูลครั้งแรก...');return;}
       const remote=snap.data();
 
-      // เปรียบเทียบ timestamp — ใครบันทึกล่าสุดชนะ
       const remoteSavedAt=remote._savedAt||0;
       const localSavedAt=S._savedAt||0;
 
+      // merge เสมอ — เอาอันที่มีค่ามากกว่า/ใหม่กว่าชนะในแต่ละ field
+      // ใช้ remote เป็น base, local เป็น overlay ถ้า local ใหม่กว่า
       let merged;
       if(remoteSavedAt>localSavedAt){
-        // remote ใหม่กว่า — เอา remote เป็นหลัก แต่รักษา logs ของ card ที่เปิดอยู่
+        // remote บันทึกล่าสุด — remote wins แต่ merge กับ local
         merged=deepMerge(S,remote);
-        // ถ้ากำลังเปิด card อยู่ ไม่แตะ logs ของ pid นั้น
-        if(Date.now()-lastEditTime<10000){
-          Object.keys(oC).filter(k=>oC[k]).forEach(function(pid){
-            if(S.logs[pid])merged.logs[pid]=S.logs[pid];
-          });
-        }
       } else {
-        // local ใหม่กว่า หรือ เท่ากัน — merge แต่ local wins
+        // local บันทึกล่าสุด — local wins แต่ merge กับ remote
         merged=deepMerge(remote,S);
       }
 
       S=merged;
       try{localStorage.setItem(DK,JSON.stringify(S));}catch(e){}
-      const openCards=Object.keys(oC).filter(k=>oC[k]);
-      if(openCards.length===0){renderAll();}
-      else{rWarn();rApptAlerts();uSum();rHandover();rPatsHeader();}
+
+      // re-render อย่างระมัดระวัง — ไม่แตะ input ที่กำลัง focus อยู่
+      const active=document.activeElement;
+      const isTyping=active&&(active.tagName==='INPUT'||active.tagName==='TEXTAREA');
+      if(!isTyping){
+        const openCards=Object.keys(oC).filter(k=>oC[k]);
+        if(openCards.length===0){renderAll();}
+        else{rWarn();rApptAlerts();uSum();rHandover();rPatsHeader();}
+      }
       showSyncStatus('☁️ ซิงค์แล้ว — realtime');
     },err=>{showSyncStatus('❌ '+err.message);});
 
