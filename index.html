@@ -812,10 +812,12 @@ try{const ph=localStorage.getItem(DK+'_photos');if(ph)S.photos=JSON.parse(ph);}c
 
 // ---- Firebase state ----
 let db=null,fbUnsubscribe=null,fbSyncTimer=null,fbLastSave=0,fbIsRemoteUpdate=false;
+let lastEditTime=0; // เวลาล่าสุดที่มีการกรอกข้อมูล
 const FB_CFG_KEY='sawanNH_fbConfig';
 
 // ---- SAVE — always local first, then Firebase debounced ----
 const save=()=>{
+  lastEditTime=Date.now(); // บันทึกเวลาที่มีการแก้ไข
   try{
     const {photos,...dataNoPhotos}=S;
     localStorage.setItem(DK,JSON.stringify(dataNoPhotos));
@@ -894,14 +896,29 @@ function initFirebase(cfg){
 
     if(fbUnsubscribe)fbUnsubscribe();
     fbUnsubscribe=db.collection('nhData').doc('main').onSnapshot({includeMetadataChanges:false},snap=>{
-      // ถ้าเพิ่งเซฟไปเอง < 3 วิ ไม่รับข้อมูลกลับ (ป้องกัน echo)
-      if(Date.now()-fbLastSave<3000)return;
+      // ถ้าเพิ่งเซฟไปเอง < 5 วิ ไม่รับข้อมูลกลับ (ป้องกัน echo)
+      if(Date.now()-fbLastSave<5000)return;
+      // ถ้าเพิ่งกรอกข้อมูล < 10 วิ ไม่ update (ป้องกันข้อมูลหาย)
+      if(Date.now()-lastEditTime<10000){
+        showSyncStatus('☁️ มีข้อมูลใหม่ (รอกรอกเสร็จ...)');
+        return;
+      }
       if(!snap.exists){pushToFirebase();showSyncStatus('☁️ อัปโหลดข้อมูลครั้งแรก...');return;}
       const remote=snap.data();
-      // Deep merge — ข้อมูลใครมาใหม่กว่าเอาของนั้น
-      S=deepMerge(S,remote);
+      // Deep merge — เอาข้อมูลจาก remote แต่ไม่ทับ local ที่มีค่าอยู่แล้ว
+      const merged=deepMerge(remote,S); // S เป็น local (ของเรา) ควร override remote
+      S=merged;
       try{localStorage.setItem(DK,JSON.stringify(S));}catch(e){}
-      renderAll();
+      // re-render เฉพาะส่วนที่ไม่ได้เปิดอยู่ — ไม่ re-render card ที่กำลังกรอก
+      const openCards=Object.keys(oC).filter(k=>oC[k]);
+      if(openCards.length===0){
+        renderAll();
+      } else {
+        // re-render เฉพาะส่วนที่ปลอดภัย
+        rWarn();rApptAlerts();uSum();rHandover();
+        // re-render patient list แต่ไม่ล้าง open cards
+        rPatsHeader();
+      }
       showSyncStatus('☁️ ซิงค์แล้ว — realtime');
     },err=>{showSyncStatus('❌ '+err.message);});
 
@@ -1424,6 +1441,29 @@ function sortPatients(patients){
     const ra=parseRoom(a.room),rb=parseRoom(b.room);
     if(ra.type!==rb.type)return ra.type-rb.type;
     return ra.num-rb.num;
+  });
+}
+
+function rPatsHeader(){
+  // re-render patient list แต่เปิด card ที่กำลัง open ไว้ (ไม่ล้างข้อมูลที่กรอก)
+  const list=document.getElementById('pList');
+  if(!list||!S.patients.length)return;
+  sortPatients(S.patients).forEach(function(p){
+    // update เฉพาะ card header (ring %, badge) ไม่แตะ cbody ที่เปิดอยู่
+    const card=document.getElementById('cb-'+p.id)?.closest('.card');
+    if(!card)return;
+    const sh=aSh[p.id]||'D';
+    const lg=gLog(p.id,curDate,sh);
+    const shMeds=getMedsForShift(p,sh);
+    const defaultT=sh==='D'?DEFAULT_TASKS_D:DEFAULT_TASKS_N;
+    const customT=sh==='D'?(p.tasksD||[]):(p.tasksN||[]);
+    const tasks=customT.length?[...customT,...defaultT.filter(t=>!customT.includes(t))]:defaultT;
+    const tDone=tasks.filter(function(t){return lg.tasks&&lg.tasks[t];}).length;
+    const mDone=shMeds.filter(function(m){return lg.meds&&lg.meds['sh_med||'+m.name];}).length;
+    const total=tasks.length+shMeds.length,done=tDone+mDone;
+    const pct=total?Math.round(done/total*100):0;
+    const rp=card.querySelector('.rp');
+    if(rp)rp.textContent=pct+'%';
   });
 }
 
