@@ -1059,7 +1059,7 @@ function gSup(pid,date,k){return((S.supplyLogs||{})[pid]||{})[date]?.[k]||0;}
 function setSup(pid,date,k,v){if(!S.supplyLogs)S.supplyLogs={};if(!S.supplyLogs[pid])S.supplyLogs[pid]={};if(!S.supplyLogs[pid][date])S.supplyLogs[pid][date]={};S.supplyLogs[pid][date][k]=Math.max(0,v);save();}
 function adjSup(pid,k,d){setSup(pid,curDate,k,gSup(pid,curDate,k)+d);rSupplyPat();}
 function sSupOtherName(pid,name){if(!S.supplyLogs)S.supplyLogs={};if(!S.supplyLogs[pid])S.supplyLogs[pid]={};if(!S.supplyLogs[pid][curDate])S.supplyLogs[pid][curDate]={};S.supplyLogs[pid][curDate].other1Name=name;save();}
-function adjPamp(pid,sh,d){const lg=eLog(pid,curDate,sh);lg.pampers=Math.max(0,(lg.pampers||0)+d);save();rPats();rPampSummary();}
+function adjPamp(pid,sh,d){const lg=eLog(pid,curDate,sh);lg.pampers=Math.max(0,(lg.pampers||0)+d);save();uPct(pid);rPampSummary();}
 
 function getMedsForShift(p,sh){
   const sm=sh==='D'?MEDS_D:MEDS_N;
@@ -1476,6 +1476,34 @@ function sortPatients(patients){
   });
 }
 
+// uPct — update เฉพาะวงกลม % ของผู้สูงอายุคนนั้น ไม่ re-render ทั้งหน้า
+function uPct(pid){
+  const p=S.patients.find(function(x){return String(x.id)===String(pid);});
+  if(!p)return;
+  const sh=aSh[pid]||'D';
+  const lg=gLog(pid,curDate,sh);
+  const defaultT=sh==='D'?DEFAULT_TASKS_D:DEFAULT_TASKS_N;
+  const customT=sh==='D'?(p.tasksD||[]):(p.tasksN||[]);
+  const tasks=customT.length?[...customT,...defaultT.filter(function(t){return!customT.includes(t);})]:[...defaultT];
+  const shMeds=getMedsForShift(p,sh);
+  const tDone=tasks.filter(function(t){return lg.tasks&&lg.tasks[t];}).length;
+  const mDone=shMeds.filter(function(m){return lg.meds&&lg.meds['sh_med||'+m.name];}).length;
+  const total=tasks.length+shMeds.length;
+  const pct=total?Math.round((tDone+mDone)/total*100):0;
+  // หา element วงกลม % ของ card นี้
+  const cb=document.getElementById('cb-'+pid);
+  const card=cb?cb.closest('.card'):null;
+  if(card){
+    const rp=card.querySelector('.rp');
+    if(rp)rp.textContent=pct+'%';
+    // update stroke
+    const R=13,C=2*Math.PI*R;
+    const O=C-(pct/100)*C;
+    const rf=card.querySelector('.rf');
+    if(rf){rf.style.strokeDashoffset=O.toFixed(1);}
+  }
+}
+
 function rPatsHeader(){
   // re-render patient list แต่เปิด card ที่กำลัง open ไว้ (ไม่ล้างข้อมูลที่กรอก)
   const list=document.getElementById('pList');
@@ -1581,7 +1609,7 @@ function tCard(id){
 }
 function sSh(pid,sh,e){if(e)e.stopPropagation();aSh[pid]=sh;rPats();}
 function sShEl(el,e){if(e)e.stopPropagation();sSh(el.dataset.pid,el.dataset.sh,null);}
-function tTask(pid,sh,t){const lg=eLog(pid,curDate,sh);if(!lg.tasks)lg.tasks={};lg.tasks[t]=!lg.tasks[t];saveNow();rPats();}
+function tTask(pid,sh,t){const lg=eLog(pid,curDate,sh);if(!lg.tasks)lg.tasks={};lg.tasks[t]=!lg.tasks[t];saveNow();uPct(pid);}
 function sBath(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.bath=lg.bath===v?null:v;save();
   const cb=document.getElementById('cb-'+pid);
   if(cb&&!cb.classList.contains('h')){const p=S.patients.find(x=>x.id===pid);if(p)cb.innerHTML=rShift(p,sh,eLog(pid,curDate,sh));}
@@ -1635,7 +1663,7 @@ function sVit(pid,sh,f,v){const lg=eLog(pid,curDate,sh);if(!lg.v)lg.v={};lg.v[f]
 function sPTRounds(pid,sh,val){const lg=eLog(pid,curDate,sh);if(!lg.pt)lg.pt={};lg.pt['เดินราวจับ']=val?parseInt(val):null;save();}
 function sFoodT(pid,sh,mk,ft){const lg=eLog(pid,curDate,sh);if(!lg.food)lg.food={};if(!lg.food[mk])lg.food[mk]={};lg.food[mk].type=lg.food[mk].type===ft?null:ft;save();rPats();}
 function sFoodD(pid,sh,mk,f,v){const lg=eLog(pid,curDate,sh);if(!lg.food)lg.food={};if(!lg.food[mk])lg.food[mk]={};lg.food[mk][f]=v;save();}
-function sStoolDid(pid,sh,v){const lg=eLog(pid,curDate,sh);if(typeof lg.stool!=='object')lg.stool={};lg.stool.did=lg.stool.did===v?null:v;if(lg.stool.did!==true){lg.stool.count='';lg.stool.texture=null;lg.stool.color=null;}save();rPats();rWarn();}
+function sStoolDid(pid,sh,v){const lg=eLog(pid,curDate,sh);if(typeof lg.stool!=='object')lg.stool={};lg.stool.did=lg.stool.did===v?null:v;if(lg.stool.did!==true){lg.stool.count='';lg.stool.texture=null;lg.stool.color=null;}save();uPct(pid);rWarn();}
 function sStoolF(pid,sh,f,v){const lg=eLog(pid,curDate,sh);if(typeof lg.stool!=='object')lg.stool={did:true};lg.stool[f]=lg.stool[f]===v?null:v;save();rPats();}
 function sUrine(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.urine=lg.urine===v?null:v;save();rPats();}
 function sNote(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.note=v;save();}
@@ -1747,7 +1775,7 @@ function rShift(p,sh,lg){
   const VS_SHIFT_D=['10:00','14:00'];
   const VS_SHIFT_N=['18:00','22:00','02:00','06:00'];
   const myVSTimes=sh==='D'?VS_SHIFT_D:VS_SHIFT_N;
-  const parrotOn=lg.parrot||myVSTimes.some(t=>{const vsd=(lg.vsData||{})[t]||{};return vsd.bp||vsd.temp||vsd.hr||vsd.o2;});
+  const parrotOn=!!lg.parrot;
   h+=`<div class="dvr"></div>
   <div class="parrot-toggle" onclick="toggleParrot(${p.id},'${sh}')">
     <div class="parrot-lbl">🦜 ฟอร์มปรอท เวร ${sh} (${myVSTimes.join(', ')})</div>
