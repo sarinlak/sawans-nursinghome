@@ -830,10 +830,14 @@ const save=()=>{
       toast('⚠️ พื้นที่เต็ม ลบรูปอัตโนมัติแล้ว — ข้อมูลงานบันทึกแล้ว');
     }catch(e2){toast('❌ บันทึกไม่ได้ กรุณา Export ข้อมูลก่อน');}
   }
-  // บันทึกรูปแยก
-  if(S.photos&&S.photos.length){
-    try{localStorage.setItem(DK+'_photos',JSON.stringify(S.photos));}catch(e){}
-  }
+  // บันทึก photos แยก (รวมถึงกรณีว่างเปล่า)
+  try{
+    if(S.photos&&S.photos.length){
+      localStorage.setItem(DK+'_photos',JSON.stringify(S.photos));
+    } else {
+      localStorage.removeItem(DK+'_photos');
+    }
+  }catch(e){}
   if(db){clearTimeout(fbSyncTimer);fbSyncTimer=setTimeout(()=>pushToFirebase(),300);}
 };
 
@@ -920,21 +924,18 @@ function initFirebase(cfg){
 
     if(fbUnsubscribe)fbUnsubscribe();
     fbUnsubscribe=db.collection('nhData').doc('main').onSnapshot({includeMetadataChanges:false},snap=>{
-      if(Date.now()-fbLastSave<5000)return;
       if(!snap.exists){pushToFirebase();showSyncStatus('☁️ อัปโหลดข้อมูลครั้งแรก...');return;}
       const remote=snap.data();
-
       const remoteSavedAt=remote._savedAt||0;
       const localSavedAt=S._savedAt||0;
 
-      // merge เสมอ — เอาอันที่มีค่ามากกว่า/ใหม่กว่าชนะในแต่ละ field
-      // ใช้ remote เป็น base, local เป็น overlay ถ้า local ใหม่กว่า
+      // ถ้า remote._savedAt == local._savedAt = เป็น echo ของตัวเอง → ข้ามได้
+      if(remoteSavedAt===localSavedAt&&localSavedAt>0)return;
+
       let merged;
       if(remoteSavedAt>localSavedAt){
-        // remote บันทึกล่าสุด — remote wins แต่ merge กับ local
         merged=deepMerge(S,remote);
       } else {
-        // local บันทึกล่าสุด — local wins แต่ merge กับ remote
         merged=deepMerge(remote,S);
       }
 
@@ -1643,9 +1644,22 @@ function sCaution(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.caution=v;save();}
 const vsTimers={};
 function sVSDebounce(pid,sh,field,val){
   const lg=eLog(pid,curDate,sh);if(!lg.v)lg.v={};lg.v[field]=val;
-  // save local immediately
+  // ถ้าเวร D → sync ค่าไปที่ฟอร์มปรอท 10:00 อัตโนมัติ
+  if(sh==='D'&&['bp','temp','hr','rr','o2'].includes(field)){
+    if(!lg.vsData)lg.vsData={};
+    if(!lg.vsData['10:00'])lg.vsData['10:00']={};
+    lg.vsData['10:00'][field]=val;
+    // update input ใน parrot table ถ้ามีอยู่ใน DOM
+    const cb=document.getElementById('cb-'+pid);
+    if(cb){
+      cb.querySelectorAll('input[oninput*="sVS"]').forEach(function(inp){
+        if(inp.getAttribute('oninput')&&inp.getAttribute('oninput').includes("'10:00','"+field+"'")){
+          inp.value=val;
+        }
+      });
+    }
+  }
   try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
-  // push Firebase after 800ms of no typing
   const key='vs_'+pid+'_'+sh+'_'+field;
   clearTimeout(vsTimers[key]);
   vsTimers[key]=setTimeout(function(){save();},800);
@@ -1656,8 +1670,19 @@ function sWoundNote(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.woundNote=v;save(
 function toggleParrot(pid,sh){
   const lg=eLog(pid,curDate,sh);
   lg.parrot=!lg.parrot;
+  // เมื่อเปิดฟอร์มปรอทในเวร D → ดึงค่า V/S หลักไปใส่ 10:00 อัตโนมัติ
+  if(lg.parrot && sh==='D' && lg.v){
+    if(!lg.vsData)lg.vsData={};
+    if(!lg.vsData['10:00'])lg.vsData['10:00']={};
+    const slot=lg.vsData['10:00'];
+    // ใส่เฉพาะช่องที่ยังว่างอยู่ ไม่ทับค่าที่กรอกแล้ว
+    if(!slot.bp && lg.v.bp)slot.bp=lg.v.bp;
+    if(!slot.temp && lg.v.temp)slot.temp=lg.v.temp;
+    if(!slot.hr && lg.v.hr)slot.hr=lg.v.hr;
+    if(!slot.rr && lg.v.rr)slot.rr=lg.v.rr;
+    if(!slot.o2 && lg.v.o2)slot.o2=lg.v.o2;
+  }
   save();
-  // re-render only this card's body
   const p=S.patients.find(x=>x.id===pid);
   if(!p)return;
   const cb=document.getElementById('cb-'+pid);
@@ -2553,7 +2578,17 @@ function togglePhotoExport(i){
 
 function rmPh(i){
   if(!confirm('ลบรูปนี้?'))return;
-  S.photos.splice(i,1);save();rPhotos();uPhotoExportNote();
+  S.photos.splice(i,1);
+  // บันทึก photos ลง localStorage ทันทีหลังลบ
+  try{
+    if(S.photos.length){
+      localStorage.setItem(DK+'_photos',JSON.stringify(S.photos));
+    } else {
+      localStorage.removeItem(DK+'_photos');
+    }
+  }catch(e){}
+  save();rPhotos();uPhotoExportNote();
+  toast('🗑️ ลบรูปแล้ว');
 }
 
 function uPhotoExportNote(){
