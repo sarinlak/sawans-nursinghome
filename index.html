@@ -872,11 +872,9 @@ function deepMergeSafe(base,overlay){
   if(overlay===null||overlay===undefined)return base;
   if(base===null||base===undefined)return overlay;
   if(typeof overlay!=='object'||Array.isArray(overlay)){
-    // boolean: true ชนะ false เสมอ (เพราะ parrot=true สำคัญกว่า false)
-    if(typeof overlay==='boolean'||typeof base==='boolean'){
-      return overlay===true?true:(base===true?true:overlay);
-    }
-    // ตัวเลข: เอาค่าที่ไม่ใช่ 0 (แต่ถ้า overlay > 0 เอา overlay)
+    // boolean: overlay ชนะเสมอ (ใครส่งล่าสุดชนะ — จัดการด้วย _savedAt ระดับบน)
+    if(typeof overlay==='boolean')return overlay;
+    // ตัวเลข: overlay ชนะถ้ามีค่า > 0
     if(typeof overlay==='number'&&typeof base==='number'){
       return overlay>0?overlay:(base>0?base:0);
     }
@@ -974,29 +972,25 @@ function initFirebase(cfg){
 
 // Deep merge: remote wins for scalars, but local wins for arrays/objects that are newer
 function deepMerge(base,overlay){
-  // base = ข้อมูลเก่า, overlay = ข้อมูลใหม่กว่า
-  // สำหรับ logs: overlay wins เพราะเป็นข้อมูลที่ save ล่าสุด
   if(overlay===null||overlay===undefined)return base;
   if(base===null||base===undefined)return overlay;
   if(typeof overlay!=='object')return overlay;
   if(Array.isArray(overlay)){
-    // patients/acts: เอาอันที่ยาวกว่า
     if(Array.isArray(base)&&base.length>overlay.length)return base;
     return overlay;
   }
   const result={};
-  // รวม keys จากทั้งสอง
-  const keys=new Set([...Object.keys(base),...Object.keys(overlay)]);
+  const keys=new Set([...Object.keys(base||{}),...Object.keys(overlay)]);
   keys.forEach(function(k){
-    if(!(k in overlay))result[k]=base[k];
-    else if(!(k in base))result[k]=overlay[k];
+    if(!(k in base))result[k]=overlay[k];
+    else if(!(k in overlay))result[k]=base[k];
     else if(typeof overlay[k]==='object'&&overlay[k]!==null&&!Array.isArray(overlay[k])){
       result[k]=deepMerge(base[k],overlay[k]);
     } else if(Array.isArray(overlay[k])){
       result[k]=(Array.isArray(base[k])&&base[k].length>overlay[k].length)?base[k]:overlay[k];
     } else {
-      // primitive: overlay wins ถ้ามีค่า, ไม่อย่างนั้นเก็บ base
-      result[k]=(overlay[k]!==null&&overlay[k]!==undefined&&overlay[k]!=='')?overlay[k]:base[k];
+      // overlay ชนะเสมอ (ใครบันทึกล่าสุดชนะ ตัดสินจาก _savedAt ระดับบน)
+      result[k]=overlay[k];
     }
   });
   return result;
@@ -1060,7 +1054,7 @@ function gLog(pid,date,sh){
   if(!lg.vsData)lg.vsData={};
   return lg;
 }
-function gSup(pid,date,k){return((S.supplyLogs||{})[pid]||{})[date]?.[k]||0;}
+function gSup(pid,date,k){return((S.supplyLogs||{})[pid]||{})[date]&&((S.supplyLogs||{})[pid]||{})[date][k]||0;}
 function setSup(pid,date,k,v){if(!S.supplyLogs)S.supplyLogs={};if(!S.supplyLogs[pid])S.supplyLogs[pid]={};if(!S.supplyLogs[pid][date])S.supplyLogs[pid][date]={};S.supplyLogs[pid][date][k]=Math.max(0,v);save();}
 function adjSup(pid,k,d){setSup(pid,curDate,k,gSup(pid,curDate,k)+d);rSupplyPat();}
 function sSupOtherName(pid,name){if(!S.supplyLogs)S.supplyLogs={};if(!S.supplyLogs[pid])S.supplyLogs[pid]={};if(!S.supplyLogs[pid][curDate])S.supplyLogs[pid][curDate]={};S.supplyLogs[pid][curDate].other1Name=name;save();}
@@ -1095,7 +1089,7 @@ function medKey(name,meal){return`${name}||${meal}`;}
 
 function countNoStool(pid){
   const allD=Object.keys((S.logs[pid]||{})).sort().reverse();
-  let c=0;for(const d of allD){if(d>curDate)continue;if(gLog(pid,d,'D').stool?.did===true||gLog(pid,d,'N').stool?.did===true)break;c++;if(c>30)break;}return c;
+  let c=0;for(const d of allD){if(d>curDate)continue;if((gLog(pid,d,'D').stool&&gLog(pid,d,'D').stool.did===true)||(gLog(pid,d,'N').stool&&gLog(pid,d,'N').stool.did===true))break;c++;if(c>30)break;}return c;
 }
 function adlLevel(s){
   if(s>=12)return{cls:'adl-green',dot:'#1A9A52',label:'🟢 พึ่งตัวเองได้ดี'};
@@ -1108,7 +1102,7 @@ let exSh='D',aSh={},oC={},editPid=null,tmpMeds=[],tmpAppts=[],reMedPid=null,reMe
 // ---- appointment entries ----
 function addApptEntry(a){
   const id='a'+Date.now()+Math.random().toString(36).slice(2,5);
-  tmpAppts.push({id,date:a?.date||'',doctor:a?.doctor||''});
+  tmpAppts.push({id,date:(a&&a.date||''),doctor:(a&&a.doctor||'')});
   renderApptEntries();
 }
 function removeApptEntry(id){tmpAppts=tmpAppts.filter(a=>a.id!==id);renderApptEntries();}
@@ -1230,7 +1224,7 @@ function _oEditP(pid){
   document.getElementById('pEmergHosp').value=p.emergHosp||'';
   document.getElementById('pNote').value=p.patNote||'';
   document.querySelectorAll('#moP .chip').forEach(c=>c.classList.remove('sel'));
-  (p.foods||[]).forEach(f=>document.querySelector(`#fchips [data-f="${f}"]`)?.classList.add('sel'));
+  (p.foods||[]).forEach(f=>{const el=document.querySelector(`#fchips [data-f="${f}"]`);if(el)el.classList.add('sel');});
   tmpMeds=(p.medications||[]).map(m=>({...m,id:'m'+Date.now()+Math.random().toString(36).slice(2,5)}));
   tmpAppts=(p.appointments||[]).map(a=>({...a,id:'a'+Date.now()+Math.random().toString(36).slice(2,5)}));
   // backward compat: if old single appointment exists
@@ -1252,7 +1246,7 @@ function saveP(){
   const patNote=document.getElementById('pNote').value.trim();
   const admit=document.getElementById('pAdmit').value;
   // first appointment for backward compat
-  const appt=appointments[0]?.date||'';const doc=appointments[0]?.doctor||'';
+  const appt=(appointments[0]?appointments[0].date:'');const doc=(appointments[0]?appointments[0].doctor:'');
   if(editPid){
     const p=S.patients.find(x=>x.id===editPid);
     if(p)Object.assign(p,{name,age:document.getElementById('page').value,room:document.getElementById('proo').value.trim(),diag:document.getElementById('pdia').value.trim(),foods,tasksD,tasksN,medications,appointments,appointment:appt,doctor:doc,admitDate:admit,dob,emergHosp,patNote});
@@ -1271,7 +1265,7 @@ function saveP(){
 // ============================================================
 function addMedEntry(m){
   const id='m'+Date.now()+Math.random().toString(36).slice(2,5);
-  tmpMeds.push({id,name:m?.name||'',meals:m?.meals||[],method:m?.method||'eat',qty:m?.qty||''});
+  tmpMeds.push({id,name:(m&&m.name||''),meals:(m&&m.meals||[]),method:(m&&m.method)||'eat',qty:(m&&m.qty)||''});
   renderMedEntries();
 }
 function removeMedEntry(id){tmpMeds=tmpMeds.filter(m=>m.id!==id);renderMedEntries();}
@@ -1375,7 +1369,7 @@ function buildOneMedEntry(med,src){
 // Element-based event handlers (use data attributes to avoid inline quote issues)
 function setMedNameEl(el){setMedName(el.dataset.eid,el.value,el.dataset.src);}
 function removeMedEntryEl(el){
-  var src=el.closest('.med-entry')?.id?.replace('me-','')?'tmp':'tmp';
+  var src=(el.closest('.med-entry')&&el.closest('.med-entry').id)?el.closest('.med-entry').id.replace('me-',''):'tmp';
   // determine src by checking which array has this id
   if(tmpMeds.find(function(m){return m.id===el.dataset.eid;}))removeMedEntry(el.dataset.eid);
   else removeReMedEntry(el.dataset.eid);
@@ -1515,7 +1509,7 @@ function rPatsHeader(){
   if(!list||!S.patients.length)return;
   sortPatients(S.patients).forEach(function(p){
     // update เฉพาะ card header (ring %, badge) ไม่แตะ cbody ที่เปิดอยู่
-    const card=document.getElementById('cb-'+p.id)?.closest('.card');
+    const card=(document.getElementById('cb-'+p.id)?document.getElementById('cb-'+p.id).closest('.card'):null);
     if(!card)return;
     const sh=aSh[p.id]||'D';
     const lg=gLog(p.id,curDate,sh);
@@ -1609,7 +1603,7 @@ function tCard(id){
     cb.classList.add('h');
   }
   // update chevron
-  const chv=cb.closest('.card')?.querySelector('.chv');
+  const chv=(cb.closest('.card')?cb.closest('.card').querySelector('.chv'):null);
   if(chv)chv.className='chv '+(oC[id]?'op':'');
 }
 function sSh(pid,sh,e){if(e)e.stopPropagation();aSh[pid]=sh;rPats();}
@@ -1695,7 +1689,7 @@ function sVSDebounce(pid,sh,field,val){
   try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
   const key='vs_'+pid+'_'+sh+'_'+field;
   clearTimeout(vsTimers[key]);
-  vsTimers[key]=setTimeout(function(){save();},800);
+  vsTimers[key]=setTimeout(function(){S._savedAt=Date.now();save();},800);
 }
 function sVSMain(pid,sh,field,val){sVSDebounce(pid,sh,field,val);}
 function sVSStatus(pid,sh,val){const lg=eLog(pid,curDate,sh);if(!lg.v)lg.v={};lg.v.status=lg.v.status===val?null:val;save();rPats();}
@@ -1768,12 +1762,12 @@ function rShift(p,sh,lg){
     ${[{k:'bp',l:'💉 BP',ph:'120/80'},{k:'temp',l:'🌡️ T°C',ph:'36.5'},{k:'hr',l:'💓 HR',ph:'72'},{k:'rr',l:'💨 RR',ph:'20'},{k:'o2',l:'🫁 O2%',ph:'98'},{k:'sugar',l:'🩸 น้ำตาล',ph:'100'}].map(f=>`
     <div class="vb">
       <div class="vbl">${f.l}</div>
-      <input class="vbi" placeholder="${f.ph}" value="${lg.v?.[f.k]||''}" oninput="sVSMain(${p.id},'${sh}','${f.k}',this.value)">
+      <input class="vbi" placeholder="${f.ph}" value="${((lg.v&&lg.v[f.k]!==undefined)?lg.v[f.k]:'')||''}" oninput="sVSMain(${p.id},'${sh}','${f.k}',this.value)">
     </div>`).join('')}
   </div>`;
   }
   h+=`<div class="opts" style="margin-top:6px">
-    ${['ปกติ','ต้องดูแล','เฝ้าระวัง','ส่งหมอ'].map(s=>`<button class="opt o${s==='ปกติ'?'g':s==='ส่งหมอ'?'r':'o'} ${lg.v?.status===s?'sel':''}" onclick="sVSStatus(${p.id},'${sh}','${s}')">${s}</button>`).join('')}
+    ${['ปกติ','ต้องดูแล','เฝ้าระวัง','ส่งหมอ'].map(s=>`<button class="opt o${s==='ปกติ'?'g':s==='ส่งหมอ'?'r':'o'} ${(lg.v&&lg.v.status)===s?'sel':''}" onclick="sVSStatus(${p.id},'${sh}','${s}')">${s}</button>`).join('')}
   </div>`;
 
   // Parrot form
@@ -1806,7 +1800,7 @@ function rShift(p,sh,lg){
   // Tasks
   if(tasks.length){
     h+=`<div class="dvr"></div><div class="sl">รายการดูแล</div>`;
-    tasks.forEach(t=>{const done=lg.tasks?.[t]||false;h+=`<div class="ci"><div class="ck ${done?'on':''}" onclick="tTask(${p.id},'${sh}','${t.replace(/'/g,"\\'")}')"></div><div class="cl ${done?'done':''}">${t}</div></div>`;});
+    tasks.forEach(t=>{const done=(lg.tasks&&lg.tasks[t])||false;h+=`<div class="ci"><div class="ck ${done?'on':''}" onclick="tTask(${p.id},'${sh}','${t.replace(/'/g,"\\'")}')"></div><div class="cl ${done?'done':''}">${t}</div></div>`;});
   }
 
   // Bath
@@ -1871,7 +1865,7 @@ function rShift(p,sh,lg){
   if(prnMeds.length){
     h+=`<div class="prn-box"><div class="prn-lbl">💊 ยาตามอาการ (PRN)</div>`;
     prnMeds.forEach(med=>{
-      const key='prn||'+med.name;const done=lg.meds?.[key]||false;
+      const key='prn||'+med.name;const done=(lg.meds&&lg.meds[key])||false;
       const mt=MED_METHODS.find(m=>m.k===med.method)||MED_METHODS[0];
       h+=`<div class="ci"><div class="ck ${done?'on':''}" onclick="tMedKey(${p.id},'${sh}','${key.replace(/'/g,"\'")}')"></div>
         <div style="flex:1"><div class="cl ${done?'done':''}">${med.name}${med.qty?` <strong style="color:var(--gold)">${med.qty}</strong>`:''}</div>
@@ -1984,12 +1978,21 @@ function rShift(p,sh,lg){
 }
 
 function sVS(pid,sh,time,field,val){
-  const lg=eLog(pid,curDate,sh);if(!lg.vsData)lg.vsData={};if(!lg.vsData[time])lg.vsData[time]={};lg.vsData[time][field]=val;
+  const lg=eLog(pid,curDate,sh);
+  if(!lg.vsData)lg.vsData={};
+  if(!lg.vsData[time])lg.vsData[time]={};
+  lg.vsData[time][field]=val;
+  // save local immediately
   try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
+  // debounce Firebase push 800ms
   const key='vs_'+pid+'_'+sh+'_'+time+'_'+field;
   clearTimeout(vsTimers[key]);
-  vsTimers[key]=setTimeout(function(){save();},800);
-  const chartEl=document.getElementById(`vs-chart-${pid}-${sh}`);
+  vsTimers[key]=setTimeout(function(){
+    S._savedAt=Date.now(); // ต้อง set ก่อน push เพื่อให้เครื่องอื่นรับได้
+    save();
+  },800);
+  // update chart
+  const chartEl=document.getElementById('vs-chart-'+pid+'-'+sh);
   if(chartEl){const curLg=gLog(pid,curDate,sh);chartEl.outerHTML=rVSChart(pid,sh,curLg);}
 }
 
@@ -2108,7 +2111,7 @@ function rVSChart(pid,sh,lg){
 
   const bpSys=[],bpDia=[],temps=[],hrs=[];
   VS_TIMES.forEach(function(t){
-    const vsd=lg.vsData?.[t]||{};
+    const vsd=(lg.vsData&&lg.vsData[t])||{};
     if(vsd.bp){const parts=vsd.bp.split('/');bpSys.push(parseFloat(parts[0])||null);bpDia.push(parseFloat(parts[1])||null);}
     else{bpSys.push(null);bpDia.push(null);}
     temps.push(vsd.temp?parseFloat(vsd.temp):null);
@@ -2161,7 +2164,7 @@ function rVSChart(pid,sh,lg){
   // Bottom table rows
   let tRow='',hrRow='',o2Row='';
   VS_TIMES.forEach(function(t){
-    const vsd=lg.vsData?.[t]||{};
+    const vsd=(lg.vsData&&lg.vsData[t])||{};
     const td='<td style="padding:3px 4px;text-align:center;border:1px solid #CCDFF0;font-size:11px">';
     tRow+=td+(vsd.temp||'-')+'</td>';
     hrRow+=td+(vsd.hr||'-')+'</td>';
@@ -2179,7 +2182,7 @@ function delP(pid){
 function uSum(){
   document.getElementById('st').textContent=S.patients.length;
   let d=0,pn=0;
-  S.patients.forEach(p=>{['D','N'].forEach(sh=>{const lg=gLog(p.id,curDate,sh);(sh==='D'?p.tasksD||[]:p.tasksN||[]).forEach(t=>{lg.tasks?.[t]?d++:pn++;});getMedsForShift(p,sh).forEach(med=>{const k='sh_med||'+med.name;lg.meds?.[k]?d++:pn++;});});});
+  S.patients.forEach(p=>{['D','N'].forEach(sh=>{const lg=gLog(p.id,curDate,sh);(sh==='D'?p.tasksD||[]:p.tasksN||[]).forEach(t=>{(lg.tasks&&lg.tasks[t])?d++:pn++;});getMedsForShift(p,sh).forEach(med=>{const k='sh_med||'+med.name;lg.meds?.[k]?d++:pn++;});});});
   document.getElementById('sd').textContent=d;document.getElementById('sp').textContent=pn;
 }
 
@@ -2538,12 +2541,12 @@ function bSum(p,dayData){
     txt+=sh==='D'?'☀️ เวร D\n':'🌙 เวร N\n';
     if(v.bp||v.temp||v.hr)txt+=`สัญญาณชีพ: T=${v.temp||'-'} HR=${v.hr||'-'} BP=${v.bp||'-'} O2=${v.o2||'-'}%\n`;
     if(v.status)txt+=`สถานะ: ${v.status}\n`;
-    if(lg.parrot){txt+=`ฟอร์มปรอท:\n`;VS_TIMES.forEach(t=>{const vsd=lg.vsData?.[t]||{};if(vsd.bp||vsd.temp||vsd.hr)txt+=`  ${t}: T=${vsd.temp||'-'} HR=${vsd.hr||'-'} BP=${vsd.bp||'-'} O2=${vsd.o2||'-'}%\n`;});}
+    if(lg.parrot){txt+=`ฟอร์มปรอท:\n`;VS_TIMES.forEach(t=>{const vsd=(lg.vsData&&lg.vsData[t])||{};if(vsd.bp||vsd.temp||vsd.hr)txt+=`  ${t}: T=${vsd.temp||'-'} HR=${vsd.hr||'-'} BP=${vsd.bp||'-'} O2=${vsd.o2||'-'}%\n`;});}
     const RENAME={'ให้อาหารเช้า':'อาหารเช้า','ให้อาหารเที่ยง':'อาหารกลางวัน','ให้อาหารเย็น':'อาหารเย็น'};
-    (sh==='D'?p.tasksD||[]:p.tasksN||[]).forEach(t=>txt+=`${lg.tasks?.[t]?'✅':'⬜'} ${RENAME[t]||t}\n`);
+    (sh==='D'?p.tasksD||[]:p.tasksN||[]).forEach(t=>txt+=`${(lg.tasks&&lg.tasks[t])?'✅':'⬜'} ${RENAME[t]||t}\n`);
     if(lg.bath)txt+=`อาบน้ำ: ${lg.bath}\n`;
     if(lg.pampers)txt+=`👶 แพมเพิส: ${lg.pampers} ตัว\n`;
-    getMedsForShift(p,sh).forEach(med=>{med.meals.forEach(meal=>{const key=medKey(med.name,meal);const mt=MED_METHODS.find(x=>x.k===med.method)||MED_METHODS[0];txt+=`${lg.meds?.[key]?'✅':'⬜'} 💊 ${med.name}${med.qty?' '+med.qty:''} ${meal} (${mt.l})\n`;});});
+    getMedsForShift(p,sh).forEach(med=>{med.meals.forEach(meal=>{const key=medKey(med.name,meal);const mt=MED_METHODS.find(x=>x.k===med.method)||MED_METHODS[0];txt+=`${(lg.meds&&lg.meds[key])?'✅':'⬜'} 💊 ${med.name}${med.qty?' '+med.qty:''} ${meal} (${mt.l})\n`;});});
     const meals=sh==='D'?[{k:'breakfast',l:'เช้า'},{k:'lunch',l:'เที่ยง'}]:[{k:'dinner',l:'เย็น'}];
     meals.forEach(ml=>{const fd=lg.food?.[ml.k]||{};if(fd.type||fd.detail)txt+=`อาหาร${ml.l}: ${fd.type||''}${fd.detail?' '+fd.detail:''}${fd.kcal?' '+fd.kcal+'kcal':''}${fd.protein?' โปรตีน'+fd.protein+'g':''}\n`;});
     const st=stoolTxt(lg.stool);if(st)txt+=`อุจจาระ: ${st}\n`;if(lg.urine)txt+=`ปัสสาวะ: ${lg.urine}\n`;if(lg.note)txt+=`📝 ${lg.note}\n`;txt+='\n';
@@ -2685,14 +2688,14 @@ function buildRepText(){
       // Tasks — only show DONE items, exclude housekeeping
       const HIDE_FROM_REP=['เติมน้ำในเหยือก','เช็ดหัวเตียง'];
       const RENAME_TASK={'ให้อาหารเช้า':'อาหารเช้า','ให้อาหารเที่ยง':'อาหารกลางวัน','ให้อาหารเย็น':'อาหารเย็น'};
-      (sh==='D'?p.tasksD||[]:p.tasksN||[]).filter(t=>!HIDE_FROM_REP.includes(t)&&lg.tasks?.[t]).forEach(t=>rep+=`✅ ${RENAME_TASK[t]||t}\n`);
+      (sh==='D'?p.tasksD||[]:p.tasksN||[]).filter(t=>!HIDE_FROM_REP.includes(t)&&(lg.tasks&&lg.tasks[t])).forEach(t=>rep+=`✅ ${RENAME_TASK[t]||t}\n`);
       if(lg.bath)rep+=`อาบน้ำ: ${lg.bath}\n`;
       rep+=`👶 แพมเพิส: ${lg.pampers||0} ตัว\n`;
       // MEDS — family sees only "ครบ/ไม่ครบ"
       const shMeds=getMedsForShift(p,sh);
       if(shMeds.length){
         const totalMed=shMeds.length;
-        const doneMed=shMeds.filter(m=>lg.meds?.['sh_med||'+m.name]).length;
+        const doneMed=shMeds.filter(m=>(lg.meds&&lg.meds['sh_med||'+m.name])).length;
         if(totalMed>0){
           if(doneMed===totalMed)rep+=`💊 ยา: ให้ยาครบแล้ว ✅\n`;
         }
@@ -2959,7 +2962,7 @@ function updatePinDots(){
 function openPINSetup(){
   ['pinOld','pinNew','pinNew2'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   const err=document.getElementById('pinSetupErr');if(err)err.textContent='';
-  const oldField=document.getElementById('pinOld')?.closest('.fl');
+  const oldField=(document.getElementById('pinOld')?document.getElementById('pinOld').closest('.fl'):null);
   if(oldField)oldField.style.display=hasPIN()?'block':'none';
   document.getElementById('moPINSetup').classList.add('open');
 }
