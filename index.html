@@ -923,14 +923,19 @@ function initFirebase(cfg){
     document.getElementById('syncBar').style.display='block';
 
     if(fbUnsubscribe)fbUnsubscribe();
+    let fbFirstLoad=true;
     fbUnsubscribe=db.collection('nhData').doc('main').onSnapshot({includeMetadataChanges:false},snap=>{
-      if(!snap.exists){pushToFirebase();showSyncStatus('☁️ อัปโหลดข้อมูลครั้งแรก...');return;}
+      if(!snap.exists){pushToFirebase();showSyncStatus('☁️ อัปโหลดข้อมูลครั้งแรก...');fbFirstLoad=false;return;}
       const remote=snap.data();
       const remoteSavedAt=remote._savedAt||0;
       const localSavedAt=S._savedAt||0;
 
-      // ถ้า remote._savedAt == local._savedAt = เป็น echo ของตัวเอง → ข้ามได้
-      if(remoteSavedAt===localSavedAt&&localSavedAt>0)return;
+      // ครั้งแรกให้ render เสมอ ไม่ว่า timestamp จะตรงกันหรือไม่
+      if(!fbFirstLoad){
+        // ถ้า remote._savedAt == local._savedAt = echo ของตัวเอง → ข้าม
+        if(remoteSavedAt===localSavedAt&&localSavedAt>0)return;
+      }
+      fbFirstLoad=false;
 
       let merged;
       if(remoteSavedAt>localSavedAt){
