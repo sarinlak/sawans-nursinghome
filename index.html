@@ -2489,10 +2489,15 @@ function rHist(){
     <div class="sl" style="margin-bottom:5px">💊 ยาล่าสุด</div>
     ${latestMeds.length?latestMeds.map(m=>{
       const mt=MED_METHODS.find(x=>x.k===m.method)||MED_METHODS[0];
-      const badge=m.prn?'PRN':m.evenDays?'วันคู่':m.specificDays&&m.days?.length?m.days.map(d=>getDowLabel(d)).join(' '):'';
+      const badge=m.prn?'PRN':m.evenDays?'วันคู่':m.specificDays&&m.days&&m.days.length?m.days.map(d=>getDowLabel(d)).join(' '):'';
+      // แสดงจำนวน: ใช้ qty รวม หรือถ้าไม่มีให้ดึงจาก qtyPerMeal
+      const qpm=m.qtyPerMeal||{};
+      const qpmVals=[...new Set(Object.values(qpm).filter(Boolean))];
+      const qtyDisplay=m.qty||(qpmVals.length===1?qpmVals[0]:qpmVals.length>1?qpmVals.join('/'):null);
+      const unit=m.method==='drop'?'หยอด':m.method==='inject'||m.method==='insulin'?'ครั้ง':'เม็ด';
       return`<div style="display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid #EEF4FC">
         <span style="flex:1;font-size:13px;font-weight:500">${m.name}</span>
-        ${m.qty?`<span style="background:var(--sky);color:#fff;font-size:11px;font-weight:700;padding:1px 7px;border-radius:8px">${m.qty}</span>`:''}
+        ${qtyDisplay?`<span style="background:var(--sky);color:#fff;font-size:11px;font-weight:700;padding:1px 7px;border-radius:8px">${qtyDisplay}${unit}</span>`:''}
         ${badge?`<span style="font-size:10px;background:var(--purple-l);color:var(--purple);padding:1px 6px;border-radius:8px">${badge}</span>`:''}
         <span class="med-badge ${mt.cls}" style="font-size:10px">${mt.l}</span>
       </div>`;
