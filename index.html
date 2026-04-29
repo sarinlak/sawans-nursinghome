@@ -928,33 +928,28 @@ function initFirebase(cfg){
       const remoteSavedAt=remote._savedAt||0;
       const localSavedAt=S._savedAt||0;
 
-      // ครั้งแรกให้ render เสมอ ไม่ว่า timestamp จะตรงกันหรือไม่
-      if(!fbFirstLoad){
-        // ถ้า remote._savedAt == local._savedAt = echo ของตัวเอง → ข้าม
-        if(remoteSavedAt===localSavedAt&&localSavedAt>0)return;
-      }
+      // ถ้าเป็น echo ของตัวเอง (timestamp เหมือนกัน) → ข้าม
+      if(!fbFirstLoad&&remoteSavedAt===localSavedAt&&localSavedAt>0)return;
       fbFirstLoad=false;
 
-      let merged;
-      if(remoteSavedAt>localSavedAt){
-        merged=deepMerge(S,remote);
-      } else {
-        merged=deepMerge(remote,S);
-      }
+      // merge เพื่อรักษาข้อมูลของทุกคน
+      const merged=deepMergeSafe(S,remote);
+      // แต่ถ้า remote ใหม่กว่ามาก (>1 วิ) ให้เชื่อ remote เป็นหลัก
+      S=(remoteSavedAt>localSavedAt+1000)?deepMergeSafe(S,remote):deepMergeSafe(remote,S);
+      S._savedAt=remoteSavedAt; // เก็บ timestamp ของ remote ไว้
+      try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
 
-      S=merged;
-      try{localStorage.setItem(DK,JSON.stringify(S));}catch(e){}
-
-      // re-render อย่างระมัดระวัง — ไม่แตะ input ที่กำลัง focus อยู่
+      // re-render
       const active=document.activeElement;
       const isTyping=active&&(active.tagName==='INPUT'||active.tagName==='TEXTAREA');
       if(!isTyping){
-        const openCards=Object.keys(oC).filter(k=>oC[k]);
+        const openCards=Object.keys(oC).filter(function(k){return oC[k];});
         if(openCards.length===0){renderAll();}
         else{rWarn();rApptAlerts();uSum();rHandover();rPatsHeader();}
       }
       showSyncStatus('☁️ ซิงค์แล้ว — realtime');
-    },err=>{showSyncStatus('❌ '+err.message);});
+    },function(err){showSyncStatus('❌ '+err.message);});
+
 
     document.getElementById('fbStatusCard').style.display='block';
     document.getElementById('fbStatusDetail').textContent='Project: '+cfg.projectId+' | ซิงค์ทุกครั้งที่บันทึก';
@@ -2074,14 +2069,14 @@ function rVSChart(pid,sh,lg){
     +'<text x="'+(PL-14)+'" y="'+(PT+CH/2)+'" font-size="8" fill="#5577AA" text-anchor="middle" transform="rotate(-90,'+(PL-14)+','+(PT+CH/2)+')">°C</text>'
     +'<text x="'+(W-PR+28)+'" y="'+(PT+CH/2)+'" font-size="8" fill="#2B78D4" text-anchor="middle" transform="rotate(90,'+(W-PR+28)+','+(PT+CH/2)+')">Pulse</text>'
     // legend
-    +'<circle cx="'+(PL+4)+'" cy="'+(PT-4)+'" r="3" fill="#E85555"/>'
-    +'<text x="'+(PL+9)+'" y="'+(PT-1)+'" font-size="7.5" fill="#E85555">T°C</text>'
-    +'<circle cx="'+(PL+36)+'" cy="'+(PT-4)+'" r="3" fill="#2B78D4"/>'
-    +'<text x="'+(PL+41)+'" y="'+(PT-1)+'" font-size="7.5" fill="#2B78D4">Pulse</text>';
+    +'<circle cx="'+(PL+4)+'" cy="'+(PT-4)+'" r="3" fill="#2B78D4"/>'
+    +'<text x="'+(PL+9)+'" y="'+(PT-1)+'" font-size="7.5" fill="#2B78D4">T°C</text>'
+    +'<circle cx="'+(PL+36)+'" cy="'+(PT-4)+'" r="3" fill="#E85555"/>'
+    +'<text x="'+(PL+41)+'" y="'+(PT-1)+'" font-size="7.5" fill="#E85555">Pulse</text>';
 
   const svgContent=grid+vGrid+axes
-    +polyline(temps,mapT,'#E85555',false,3,'#E85555')
-    +polyline(hrs,mapP,'#2B78D4',false,3,'#2B78D4')
+    +polyline(temps,mapT,'#2B78D4',false,3,'#2B78D4')
+    +polyline(hrs,mapP,'#E85555',false,3,'#E85555')
     +labels;
 
   const svg='<svg width="100%" viewBox="0 0 '+W+' '+H+'" style="background:#F5FAFF;border:1px solid #BDDDF5;border-radius:8px;display:block">'+svgContent+'</svg>';
