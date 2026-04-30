@@ -1146,7 +1146,43 @@ function setApptDoc(id,val){const a=tmpAppts.find(x=>x.id===id);if(a)a.doctor=va
 // ============================================================
 // INIT
 // ============================================================
+function archiveOldLogs(){
+  // ย้ายข้อมูลเกิน 1 ปีไปเก็บใน Firebase archive collection
+  const cutoff=new Date();
+  cutoff.setFullYear(cutoff.getFullYear()-1);
+  const cutoffStr=cutoff.toLocaleDateString('en-CA');
+  let hasOld=false;
+  const oldLogs={};
+
+  Object.keys(S.logs||{}).forEach(function(pid){
+    Object.keys(S.logs[pid]||{}).forEach(function(date){
+      if(date<cutoffStr){
+        hasOld=true;
+        if(!oldLogs[pid])oldLogs[pid]={};
+        oldLogs[pid][date]=S.logs[pid][date];
+        delete S.logs[pid][date];
+      }
+    });
+  });
+
+  if(hasOld&&db){
+    // บันทึกข้อมูลเก่าไปที่ archive collection
+    const yr=new Date().getFullYear()-1;
+    db.collection('nhArchive').doc('logs_'+yr).set(oldLogs,{merge:true})
+      .then(function(){
+        save();
+        console.log('Archived logs older than '+cutoffStr);
+      })
+      .catch(function(){save();}); // ถ้า archive ไม่ได้ก็ save ปกติ
+  }
+}
+
 function init(){
+  // Archive ข้อมูลเก่าเกิน 1 ปี (ทำวันละครั้ง)
+  const lastArchive=localStorage.getItem('sawanNH_lastArchive')||'';
+  if(lastArchive!==tday()){
+    setTimeout(function(){archiveOldLogs();localStorage.setItem('sawanNH_lastArchive',tday());},5000);
+  }
   document.getElementById('dateInput').value=curDate;
   const h=new Date().getHours();
   document.getElementById('hsub').textContent=`นครสวรรค์ • ${h>=8&&h<16?'☀️ เวร D':'🌙 เวร N'}`;
@@ -2519,17 +2555,20 @@ function rHist(){
     <div class="sl" style="margin-bottom:5px">💊 ยาล่าสุด</div>
     ${latestMeds.length?latestMeds.map(m=>{
       const mt=MED_METHODS.find(x=>x.k===m.method)||MED_METHODS[0];
-      const badge=m.prn?'PRN':m.evenDays?'วันคู่':m.specificDays&&m.days&&m.days.length?m.days.map(d=>getDowLabel(d)).join(' '):'';
-      // แสดงจำนวน: ใช้ qty รวม หรือถ้าไม่มีให้ดึงจาก qtyPerMeal
-      const qpm=m.qtyPerMeal||{};
-      const qpmVals=[...new Set(Object.values(qpm).filter(Boolean))];
-      const qtyDisplay=m.qty||(qpmVals.length===1?qpmVals[0]:qpmVals.length>1?qpmVals.join('/'):null);
       const unit=m.method==='drop'?'หยอด':m.method==='inject'||m.method==='insulin'?'ครั้ง':'เม็ด';
-      return`<div style="display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid #EEF4FC">
-        <span style="flex:1;font-size:13px;font-weight:500">${m.name}</span>
-        ${qtyDisplay?`<span style="background:var(--sky);color:#fff;font-size:11px;font-weight:700;padding:1px 7px;border-radius:8px">${qtyDisplay}${unit}</span>`:''}
-        ${badge?`<span style="font-size:10px;background:var(--purple-l);color:var(--purple);padding:1px 6px;border-radius:8px">${badge}</span>`:''}
-        <span class="med-badge ${mt.cls}" style="font-size:10px">${mt.l}</span>
+      const badge=m.prn?'⚡ PRN':m.evenDays?'วันคู่':m.specificDays&&m.days&&m.days.length?m.days.map(d=>getDowLabel(d)).join(' '):'';
+      // แสดงแต่ละมื้อพร้อมจำนวน
+      const mealLines=(m.meals||[]).map(function(meal){
+        const q=(m.qtyPerMeal||{})[meal]||m.qty||'';
+        return '<span style="display:inline-block;font-size:11px;color:var(--muted);margin-right:6px">'+meal+(q?' <strong style="color:var(--sky)">'+q+unit+'</strong>':'')+'</span>';
+      }).join('');
+      return`<div style="padding:6px 0;border-bottom:1px solid #EEF4FC">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+          <span style="font-size:13px;font-weight:600;color:var(--text)">${m.name}</span>
+          <span class="med-badge ${mt.cls}" style="font-size:10px">${mt.l}</span>
+          ${badge?`<span style="font-size:10px;background:var(--purple-l);color:var(--purple);padding:1px 6px;border-radius:8px">${badge}</span>`:''}
+        </div>
+        <div style="padding-left:4px">${mealLines||'<span style="font-size:11px;color:var(--muted)">ไม่ระบุมื้อ</span>'}</div>
       </div>`;
     }).join(''):`<div style="font-size:13px;color:var(--muted)">ยังไม่มียา</div>`}
 
