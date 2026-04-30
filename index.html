@@ -838,7 +838,7 @@ const save=()=>{
       localStorage.removeItem(DK+'_photos');
     }
   }catch(e){}
-  if(db){clearTimeout(fbSyncTimer);fbSyncTimer=setTimeout(()=>pushToFirebase(),300);}
+  if(db){clearTimeout(fbSyncTimer);fbSyncTimer=setTimeout(()=>pushToFirebase(),200);}
 };
 
 // saveNow — push Firebase ทันทีไม่รอ debounce (ใช้กับการติ๊ก)
@@ -848,37 +848,67 @@ function pushToFirebase(){
   if(!db)return;
   const{photos,...dataNoPhotos}=S;
   showSyncStatus('⏳ กำลังซิงค์...');
+
   const ref=db.collection('nhData').doc('main');
-  db.runTransaction(function(tx){
-    return tx.get(ref).then(function(doc){
-      if(!doc.exists){tx.set(ref,dataNoPhotos);return;}
-      const remote=doc.data();
-      const merged=deepMergeSafe(remote,dataNoPhotos);
-      tx.set(ref,merged);
-    });
-  }).then(function(){
-    fbLastSave=Date.now();
-    showSyncStatus('✅ ซิงค์ '+new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}));
-    const chunks=[];for(let i=0;i<photos.length;i+=5)chunks.push(photos.slice(i,i+5));
-    if(chunks.length)Promise.all(chunks.map((ch,i)=>db.collection('nhData').doc('photos_'+i).set({photos:ch,chunk:i}))).catch(()=>{});
-  }).catch(function(err){
-    ref.set(dataNoPhotos,{merge:true})
-      .then(function(){fbLastSave=Date.now();showSyncStatus('✅ ซิงค์แล้ว');})
-      .catch(function(e){showSyncStatus('⚠️ ซิงค์ไม่ได้: '+(e.code||e.message));});
-  });
+
+  // สร้าง flat update object ด้วย dot-notation
+  // เพื่อ update เฉพาะ field ที่เปลี่ยน ไม่ทับ field อื่น
+  function flattenForUpdate(obj, prefix, result){
+    result=result||{};
+    for(var k in obj){
+      if(!obj.hasOwnProperty(k))continue;
+      var val=obj[k];
+      var newKey=prefix?prefix+'.'+k:k;
+      if(val!==null&&typeof val==='object'&&!Array.isArray(val)&&Object.keys(val).length>0){
+        flattenForUpdate(val,newKey,result);
+      } else {
+        result[newKey]=val;
+      }
+    }
+    return result;
+  }
+
+  // ใช้ dot-notation สำหรับ logs และ supplyLogs (nested deep)
+  // ใช้ set ปกติสำหรับ patients, acts (array)
+  var updateObj={
+    patients:dataNoPhotos.patients||[],
+    acts:dataNoPhotos.acts||[],
+    _savedAt:dataNoPhotos._savedAt||Date.now()
+  };
+
+  // flatten logs และ supplyLogs
+  if(dataNoPhotos.logs){
+    var flatLogs=flattenForUpdate(dataNoPhotos.logs,'logs');
+    for(var k in flatLogs)updateObj[k]=flatLogs[k];
+  }
+  if(dataNoPhotos.supplyLogs){
+    var flatSupply=flattenForUpdate(dataNoPhotos.supplyLogs,'supplyLogs');
+    for(var k in flatSupply)updateObj[k]=flatSupply[k];
+  }
+
+  ref.update(updateObj)
+    .catch(function(){
+      // ถ้า doc ยังไม่มี → ใช้ set แทน
+      return ref.set(dataNoPhotos,{merge:true});
+    })
+    .then(function(){
+      fbLastSave=Date.now();
+      showSyncStatus('✅ ซิงค์ '+new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}));
+      var chunks=[];for(var i=0;i<photos.length;i+=5)chunks.push(photos.slice(i,i+5));
+      if(chunks.length)Promise.all(chunks.map(function(ch,i){return db.collection('nhData').doc('photos_'+i).set({photos:ch,chunk:i});})).catch(function(){});
+    })
+    .catch(function(err){showSyncStatus('⚠️ ซิงค์ไม่ได้: '+(err.code||err.message));});
 }
 
 function deepMergeSafe(base,overlay){
   if(overlay===null||overlay===undefined)return base;
   if(base===null||base===undefined)return overlay;
   if(typeof overlay!=='object'||Array.isArray(overlay)){
-    // boolean: overlay ชนะเสมอ (ใครส่งล่าสุดชนะ — จัดการด้วย _savedAt ระดับบน)
+    // boolean: overlay wins (ใครบันทึกล่าสุดชนะ)
     if(typeof overlay==='boolean')return overlay;
-    // ตัวเลข: overlay ชนะถ้ามีค่า > 0
-    if(typeof overlay==='number'&&typeof base==='number'){
-      return overlay>0?overlay:(base>0?base:0);
-    }
-    // string: overlay ชนะถ้ามีค่า
+    // number: overlay wins ถ้ามีค่า (รวม 0 ด้วย — 0 หมายถึงไม่มีแพมเพิส ฯลฯ)
+    if(typeof overlay==='number')return overlay;
+    // string: overlay wins ถ้ามีค่า, ไม่อย่างนั้นเก็บ base
     if(overlay!==null&&overlay!==undefined&&overlay!=='')return overlay;
     if(base!==null&&base!==undefined&&base!=='')return base;
     return overlay;
