@@ -819,7 +819,7 @@ const FB_CFG_KEY='sawanNH_fbConfig';
 // ---- SAVE — always local first, then Firebase debounced ----
 const save=()=>{
   lastEditTime=Date.now();
-  S._savedAt=Date.now(); // timestamp ของ save ล่าสุด
+  S._savedAt=Date.now()*1000+Math.floor(Math.random()*999);
   try{
     const {photos,...dataNoPhotos}=S;
     localStorage.setItem(DK,JSON.stringify(dataNoPhotos));
@@ -867,7 +867,7 @@ function deepMergeSafe(base,overlay){
     if(typeof overlay==='boolean')return overlay;
     // number: overlay wins ถ้ามีค่า (รวม 0 ด้วย — 0 หมายถึงไม่มีแพมเพิส ฯลฯ)
     if(typeof overlay==='number')return overlay;
-    // string: overlay wins เสมอ รวม '' (ลบข้อความต้อง sync ด้วย)
+    // string: overlay wins เสมอ รวม '' ด้วย
     return overlay;
   }
   const result={};
@@ -918,8 +918,8 @@ function initFirebase(cfg){
       if(!fbFirstLoad&&remoteSavedAt>0&&remoteSavedAt===localSavedAt)return;
       fbFirstLoad=false;
 
-      // remote ชนะเสมอ — Firebase เป็น source of truth
-      // merge โดยให้ remote เป็น overlay (ชนะ local)
+      // merge ทั้งสองฝั่งเสมอ: local เป็น base, remote เป็น overlay
+      // ทำให้ข้อมูลที่ทำบนเครื่องไหนก็จะรวมกัน ไม่ทับกัน
       S=deepMergeSafe(S,remote);
       S._savedAt=Math.max(remoteSavedAt,localSavedAt);
       try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
