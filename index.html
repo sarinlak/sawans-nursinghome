@@ -983,13 +983,14 @@ function initFirebase(cfg){
       fbFirstLoad=false;
 
       // update patients, acts, supplyLogs
-      if(remoteSavedAt>=localSavedAt){
-        S.patients=remote.patients||S.patients;
-        S.acts=remote.acts||S.acts;
-        S.nhConfig=remote.nhConfig||S.nhConfig;
-        if(remote.supplyLogs)S.supplyLogs=deepMergeSafe(S.supplyLogs||{},remote.supplyLogs);
-        S._savedAt=remoteSavedAt;
-      }
+      // Firebase เป็น source of truth เสมอ — merge ทุกกรณี ไม่สนใจว่า local หรือ remote ใครสูงกว่า
+      // ข้อมูลการกดติ๊กงาน (logs) sync แยกผ่าน nhLogs listener — ส่วนนี้จัดการ patients/acts/config
+      if(remote.patients&&remote.patients.length)S.patients=remote.patients;
+      if(remote.acts&&remote.acts.length)S.acts=remote.acts;
+      if(remote.nhConfig)S.nhConfig=remote.nhConfig;
+      if(remote.supplyLogs)S.supplyLogs=deepMergeSafe(S.supplyLogs||{},remote.supplyLogs);
+      // อัปเดต _savedAt เป็นค่าสูงสุดระหว่าง local กับ remote
+      if(remoteSavedAt>localSavedAt)S._savedAt=remoteSavedAt;
       try{var d2=Object.assign({},S);delete d2.photos;localStorage.setItem(DK,JSON.stringify(d2));}catch(e){}
       var focusId2=document.activeElement&&document.activeElement.id;
       var focusVal2=document.activeElement&&(document.activeElement.value||'');
@@ -1805,7 +1806,7 @@ function sVSDebounce(pid,sh,field,val){
   try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
   const key='vs_'+pid+'_'+sh+'_'+field;
   clearTimeout(vsTimers[key]);
-  vsTimers[key]=setTimeout(function(){S._savedAt=Date.now();save();},800);
+  vsTimers[key]=setTimeout(function(){save();},800);
 }
 function sVSMain(pid,sh,field,val){sVSDebounce(pid,sh,field,val);}
 function sVSStatus(pid,sh,val){const lg=eLog(pid,curDate,sh);if(!lg.v)lg.v={};lg.v.status=lg.v.status===val?null:val;save();rPats();}
@@ -2104,7 +2105,7 @@ function sVS(pid,sh,time,field,val){
   const key='vs_'+pid+'_'+sh+'_'+time+'_'+field;
   clearTimeout(vsTimers[key]);
   vsTimers[key]=setTimeout(function(){
-    S._savedAt=Date.now(); // ต้อง set ก่อน push เพื่อให้เครื่องอื่นรับได้
+    // _savedAt set ใน save() function แล้ว
     save();
   },800);
   // update chart
