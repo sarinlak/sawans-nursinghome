@@ -820,13 +820,12 @@ try{
     try{const d2=Object.assign({},S);delete d2.photos;localStorage.setItem(DK,JSON.stringify(d2));}catch(e){}
   }
 }catch(e){S={...S,...SEED_DATA};}
-// logs โหลดจาก Firebase เสมอ — ล้าง local logs ทิ้ง
-S.logs={};
+// logs: ถ้ามีใน localStorage ให้ใช้ก่อน จะถูก overwrite โดย Firebase หลัง connect
 // โหลดรูปจาก storage แยก
 try{const ph=localStorage.getItem(DK+'_photos');if(ph)S.photos=JSON.parse(ph);}catch(e){}
 
 // ---- Firebase state ----
-let db=null,fbUnsubscribe=null,fbSyncTimer=null,fbLastSave=0,fbIsRemoteUpdate=false;
+let db=null,fbUnsubscribe=null,fbSyncTimer=null,fbLastSave=0,fbIsRemoteUpdate=false,fbLogsReady=false;
 let lastEditTime=0; // เวลาล่าสุดที่มีการกรอกข้อมูล
 const FB_CFG_KEY='sawanNH_fbConfig';
 
@@ -876,16 +875,19 @@ function pushToFirebase(){
     _savedAt:dataNoPhotos._savedAt||Date.now()
   },{merge:true});
 
-  // logs: แต่ละ pid แต่ละวัน เป็น document แยก
-  var logs=dataNoPhotos.logs||{};
-  Object.keys(logs).forEach(function(pid){
-    var pidLogs=logs[pid]||{};
-    Object.keys(pidLogs).forEach(function(date){
-      var dateLog=pidLogs[date]||{};
-      var ref=db.collection('nhLogs').doc(pid+'_'+date);
-      batch.set(ref,dateLog,{merge:true});
+  // logs: push เฉพาะหลัง Firebase โหลดครบแล้ว (fbLogsReady) เพื่อป้องกัน overwrite ด้วยข้อมูลว่าง
+  if(fbLogsReady){
+    var logs=dataNoPhotos.logs||{};
+    Object.keys(logs).forEach(function(pid){
+      var pidLogs=logs[pid]||{};
+      Object.keys(pidLogs).forEach(function(date){
+        var dateLog=pidLogs[date]||{};
+        if(Object.keys(dateLog).length===0)return; // ข้ามถ้าว่างเปล่า
+        var ref=db.collection('nhLogs').doc(pid+'_'+date);
+        batch.set(ref,dateLog,{merge:true});
+      });
     });
-  });
+  }
 
   batch.commit()
     .then(function(){
@@ -1002,6 +1004,7 @@ function initFirebase(cfg){
             S.logs[pid][date]=deepMergeSafe(S.logs[pid][date]||{},doc.data());
           });
           try{var d2=Object.assign({},S);delete d2.photos;localStorage.setItem(DK,JSON.stringify(d2));}catch(e){}
+          fbLogsReady=true; // Firebase logs โหลดครบแล้ว — อนุญาตให้ push logs ได้
           renderAll();
           showSyncStatus('☁️ ซิงค์แล้ว — realtime');
 
