@@ -1001,13 +1001,14 @@ function initFirebase(cfg){
       // ครั้งแรก: โหลด logs ทั้งหมดจาก nhLogs แล้ว listen realtime
       if(wasFirst){
         db.collection('nhLogs').get().then(function(qs){
-          if(!S.logs)S.logs={};
+          // Firebase logs เป็น source of truth — overwrite local ทั้งหมด
+          S.logs={};
           qs.forEach(function(doc){
             var parts=doc.id.split('_');
             var pid=parts[0];
             var date=parts.slice(1).join('_');
             if(!S.logs[pid])S.logs[pid]={};
-            S.logs[pid][date]=deepMergeSafe(S.logs[pid][date]||{},doc.data());
+            S.logs[pid][date]=doc.data();
           });
           try{var d2=Object.assign({},S);delete d2.photos;localStorage.setItem(DK,JSON.stringify(d2));}catch(e){}
           renderAll();
