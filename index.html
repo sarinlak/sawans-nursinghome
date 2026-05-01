@@ -819,8 +819,7 @@ const FB_CFG_KEY='sawanNH_fbConfig';
 // ---- SAVE — always local first, then Firebase debounced ----
 const save=()=>{
   lastEditTime=Date.now();
-  // ใช้ timestamp + random เพื่อป้องกัน 2 อุปกรณ์บันทึกพร้อมกันแล้ว _savedAt ชนกัน
-  S._savedAt=Date.now()*1000+Math.floor(Math.random()*999);
+  S._savedAt=Date.now(); // timestamp ของ save ล่าสุด
   try{
     const {photos,...dataNoPhotos}=S;
     localStorage.setItem(DK,JSON.stringify(dataNoPhotos));
@@ -908,11 +907,13 @@ function deepMergeSafe(base,overlay){
   if(overlay===null||overlay===undefined)return base;
   if(base===null||base===undefined)return overlay;
   if(typeof overlay!=='object'||Array.isArray(overlay)){
-    // boolean: overlay wins เสมอ (รวม false ด้วย — untick ต้อง sync)
+    // boolean: overlay wins (ใครบันทึกล่าสุดชนะ)
     if(typeof overlay==='boolean')return overlay;
-    // number: overlay wins เสมอ (รวม 0 ด้วย)
+    // number: overlay wins ถ้ามีค่า (รวม 0 ด้วย — 0 หมายถึงไม่มีแพมเพิส ฯลฯ)
     if(typeof overlay==='number')return overlay;
-    // string: overlay wins เสมอ (รวม '' ด้วย — ลบข้อความต้อง sync)
+    // string: overlay wins ถ้ามีค่า, ไม่อย่างนั้นเก็บ base
+    if(overlay!==null&&overlay!==undefined&&overlay!=='')return overlay;
+    if(base!==null&&base!==undefined&&base!=='')return base;
     return overlay;
   }
   const result={};
@@ -975,10 +976,7 @@ function initFirebase(cfg){
         S._savedAt=remoteSavedAt;
       }
       try{var d2=Object.assign({},S);delete d2.photos;localStorage.setItem(DK,JSON.stringify(d2));}catch(e){}
-      var focusedId2=document.activeElement&&document.activeElement.id;
-      var focusedVal2=document.activeElement&&(document.activeElement.value||'');
       renderAll();
-      if(focusedId2){var el2=document.getElementById(focusedId2);if(el2&&el2!==document.activeElement){el2.focus();if(el2.tagName==='INPUT'||el2.tagName==='TEXTAREA'){el2.value=focusedVal2;}}}
       showSyncStatus('☁️ ซิงค์แล้ว — realtime');
 
       // ครั้งแรก: โหลด logs ทั้งหมดจาก nhLogs แล้ว listen realtime
@@ -1000,9 +998,6 @@ function initFirebase(cfg){
           if(logsListener)logsListener();
           logsListener=db.collection('nhLogs').onSnapshot({includeMetadataChanges:false},function(qs){
             if(!S.logs)S.logs={};
-            // บันทึก focused element ก่อน render ใหม่ เพื่อ restore หลัง render
-            var focusedId=document.activeElement&&document.activeElement.id;
-            var focusedVal=document.activeElement&&(document.activeElement.value||'');
             qs.docChanges().forEach(function(change){
               if(change.type==='removed')return;
               var parts=change.doc.id.split('_');
@@ -1013,17 +1008,6 @@ function initFirebase(cfg){
             });
             try{var d2=Object.assign({},S);delete d2.photos;localStorage.setItem(DK,JSON.stringify(d2));}catch(e){}
             renderAll();
-            // restore focus และค่าที่กำลังพิมพ์อยู่
-            if(focusedId){
-              var el=document.getElementById(focusedId);
-              if(el&&el!==document.activeElement){
-                el.focus();
-                if(el.tagName==='INPUT'||el.tagName==='TEXTAREA'){
-                  el.value=focusedVal;
-                  el.setSelectionRange&&el.setSelectionRange(focusedVal.length,focusedVal.length);
-                }
-              }
-            }
             showSyncStatus('☁️ ซิงค์แล้ว — realtime');
           },function(){});
         }).catch(function(){});
