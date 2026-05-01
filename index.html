@@ -917,25 +917,22 @@ function initFirebase(cfg){
       const remoteSavedAt=remote._savedAt||0;
       const localSavedAt=S._savedAt||0;
 
-      // ถ้าเป็น echo ของตัวเอง (timestamp เหมือนกัน) → ข้าม
-      if(!fbFirstLoad&&remoteSavedAt===localSavedAt&&localSavedAt>0)return;
+      // ข้ามเฉพาะเมื่อเป็น echo ของตัวเอง (timestamp เหมือนกัน)
+      if(!fbFirstLoad&&remoteSavedAt>0&&remoteSavedAt===localSavedAt)return;
       fbFirstLoad=false;
 
-      // merge เพื่อรักษาข้อมูลของทุกคน
-      const merged=deepMergeSafe(S,remote);
-      // แต่ถ้า remote ใหม่กว่ามาก (>1 วิ) ให้เชื่อ remote เป็นหลัก
-      S=(remoteSavedAt>localSavedAt+1000)?deepMergeSafe(S,remote):deepMergeSafe(remote,S);
-      S._savedAt=remoteSavedAt; // เก็บ timestamp ของ remote ไว้
+      // remote ใหม่กว่า → เชื่อ remote เป็นหลัก merge กับ local
+      // local ใหม่กว่า → เชื่อ local เป็นหลัก merge กับ remote
+      if(remoteSavedAt>localSavedAt){
+        S=deepMergeSafe(S,remote); // remote wins
+      } else {
+        S=deepMergeSafe(remote,S); // local wins
+      }
+      S._savedAt=Math.max(remoteSavedAt,localSavedAt);
       try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
 
-      // re-render
-      const active=document.activeElement;
-      const isTyping=active&&(active.tagName==='INPUT'||active.tagName==='TEXTAREA');
-      if(!isTyping){
-        const openCards=Object.keys(oC).filter(function(k){return oC[k];});
-        if(openCards.length===0){renderAll();}
-        else{rWarn();rApptAlerts();uSum();rHandover();rPatsHeader();}
-      }
+      // render เสมอ — ไม่ block แม้กำลังพิมพ์
+      renderAll();
       showSyncStatus('☁️ ซิงค์แล้ว — realtime');
     },function(err){showSyncStatus('❌ '+err.message);});
 
@@ -1551,8 +1548,7 @@ function rPats(){
   if(!S.patients.length){list.innerHTML='<div class="empty"><div class="ei">👴</div>ยังไม่มีข้อมูลผู้สูงอายุ<br><small>กด "เพิ่ม" เพื่อเริ่มต้น</small></div>';return;}
   list.innerHTML=sortPatients(S.patients).map(function(p){
     const sh=aSh[p.id]||'D';
-    const shDate=getShiftDate(sh);
-    const lg=gLog(p.id,shDate,sh);
+    const lg=gLog(p.id,curDate,sh);
     const isOpen=oC[p.id]||false; // default ปิด
     const ini=p.name.replace(/คุณ|นาย|นาง|นางสาว/g,'').trim().charAt(0)||'?';
     const defaultT=sh==='D'?DEFAULT_TASKS_D:DEFAULT_TASKS_N;
