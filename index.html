@@ -849,14 +849,58 @@ function pushToFirebase(){
   if(!db)return;
   const{photos,...dataNoPhotos}=S;
   showSyncStatus('⏳ กำลังซิงค์...');
-  db.collection('nhData').doc('main').set(dataNoPhotos,{merge:true})
+
+  var batch=db.batch();
+
+  // main: patients, acts, config, _savedAt
+  var mainRef=db.collection('nhData').doc('main');
+  batch.set(mainRef,{
+    patients:dataNoPhotos.patients||[],
+    acts:dataNoPhotos.acts||[],
+    nhConfig:dataNoPhotos.nhConfig||{},
+    supplyLogs:dataNoPhotos.supplyLogs||{},
+    _savedAt:dataNoPhotos._savedAt||Date.now()
+  },{merge:true});
+
+  // logs: แต่ละ pid แต่ละวัน เป็น document แยก
+  var logs=dataNoPhotos.logs||{};
+  Object.keys(logs).forEach(function(pid){
+    var pidLogs=logs[pid]||{};
+    Object.keys(pidLogs).forEach(function(date){
+      var dateLog=pidLogs[date]||{};
+      var ref=db.collection('nhLogs').doc(pid+'_'+date);
+      batch.set(ref,dateLog,{merge:true});
+    });
+  });
+
+  batch.commit()
     .then(function(){
       fbLastSave=Date.now();
       showSyncStatus('✅ ซิงค์ '+new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}));
       var chunks=[];for(var i=0;i<photos.length;i+=5)chunks.push(photos.slice(i,i+5));
       if(chunks.length)Promise.all(chunks.map(function(ch,i){return db.collection('nhData').doc('photos_'+i).set({photos:ch,chunk:i});})).catch(function(){});
     })
-    .catch(function(err){showSyncStatus('⚠️ ซิงค์ไม่ได้: '+(err.code||err.message));});
+    .catch(function(err){
+      // batch อาจเกิน 500 ops → fallback ทีละ doc
+      var p2=db.collection('nhData').doc('main').set({
+        patients:dataNoPhotos.patients||[],
+        acts:dataNoPhotos.acts||[],
+        nhConfig:dataNoPhotos.nhConfig||{},
+        supplyLogs:dataNoPhotos.supplyLogs||{},
+        _savedAt:dataNoPhotos._savedAt||Date.now()
+      },{merge:true});
+      var logs2=dataNoPhotos.logs||{};
+      var logPromises=[];
+      Object.keys(logs2).forEach(function(pid){
+        var pidLogs=logs2[pid]||{};
+        Object.keys(pidLogs).forEach(function(date){
+          logPromises.push(db.collection('nhLogs').doc(pid+'_'+date).set(pidLogs[date]||{},{merge:true}));
+        });
+      });
+      Promise.all([p2].concat(logPromises))
+        .then(function(){fbLastSave=Date.now();showSyncStatus('✅ ซิงค์แล้ว');})
+        .catch(function(e){showSyncStatus('⚠️ ซิงค์ไม่ได้: '+(e.code||e.message));});
+    });
 }
 
 function deepMergeSafe(base,overlay){
@@ -911,24 +955,63 @@ function initFirebase(cfg){
 
     if(fbUnsubscribe)fbUnsubscribe();
     let fbFirstLoad=true;
-    fbUnsubscribe=db.collection('nhData').doc('main').onSnapshot({includeMetadataChanges:false},snap=>{
+    let logsListener=null;
+
+    fbUnsubscribe=db.collection('nhData').doc('main').onSnapshot({includeMetadataChanges:false},function(snap){
       if(!snap.exists){pushToFirebase();showSyncStatus('☁️ อัปโหลดข้อมูลครั้งแรก...');fbFirstLoad=false;return;}
-      const remote=snap.data();
-      const remoteSavedAt=remote._savedAt||0;
-      const localSavedAt=S._savedAt||0;
+      var remote=snap.data();
+      var remoteSavedAt=remote._savedAt||0;
+      var localSavedAt=S._savedAt||0;
 
       if(!fbFirstLoad&&remoteSavedAt>0&&remoteSavedAt===localSavedAt)return;
+      var wasFirst=fbFirstLoad;
       fbFirstLoad=false;
 
+      // update patients, acts, supplyLogs
       if(remoteSavedAt>=localSavedAt){
-        S=deepMergeSafe(S,remote);
-      } else {
-        S=deepMergeSafe(remote,S);
+        S.patients=remote.patients||S.patients;
+        S.acts=remote.acts||S.acts;
+        S.nhConfig=remote.nhConfig||S.nhConfig;
+        if(remote.supplyLogs)S.supplyLogs=deepMergeSafe(S.supplyLogs||{},remote.supplyLogs);
+        S._savedAt=remoteSavedAt;
       }
-      S._savedAt=Math.max(remoteSavedAt,localSavedAt);
-      try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
+      try{var d2=Object.assign({},S);delete d2.photos;localStorage.setItem(DK,JSON.stringify(d2));}catch(e){}
       renderAll();
       showSyncStatus('☁️ ซิงค์แล้ว — realtime');
+
+      // ครั้งแรก: โหลด logs ทั้งหมดจาก nhLogs แล้ว listen realtime
+      if(wasFirst){
+        db.collection('nhLogs').get().then(function(qs){
+          if(!S.logs)S.logs={};
+          qs.forEach(function(doc){
+            var parts=doc.id.split('_');
+            var pid=parts[0];
+            var date=parts.slice(1).join('_');
+            if(!S.logs[pid])S.logs[pid]={};
+            S.logs[pid][date]=deepMergeSafe(S.logs[pid][date]||{},doc.data());
+          });
+          try{var d2=Object.assign({},S);delete d2.photos;localStorage.setItem(DK,JSON.stringify(d2));}catch(e){}
+          renderAll();
+          showSyncStatus('☁️ ซิงค์แล้ว — realtime');
+
+          // listen changes realtime
+          if(logsListener)logsListener();
+          logsListener=db.collection('nhLogs').onSnapshot({includeMetadataChanges:false},function(qs){
+            if(!S.logs)S.logs={};
+            qs.docChanges().forEach(function(change){
+              if(change.type==='removed')return;
+              var parts=change.doc.id.split('_');
+              var pid=parts[0];
+              var date=parts.slice(1).join('_');
+              if(!S.logs[pid])S.logs[pid]={};
+              S.logs[pid][date]=deepMergeSafe(S.logs[pid][date]||{},change.doc.data());
+            });
+            try{var d2=Object.assign({},S);delete d2.photos;localStorage.setItem(DK,JSON.stringify(d2));}catch(e){}
+            renderAll();
+            showSyncStatus('☁️ ซิงค์แล้ว — realtime');
+          },function(){});
+        }).catch(function(){});
+      }
     },function(err){showSyncStatus('❌ '+err.message);});
 
 
