@@ -849,49 +849,7 @@ function pushToFirebase(){
   if(!db)return;
   const{photos,...dataNoPhotos}=S;
   showSyncStatus('⏳ กำลังซิงค์...');
-
-  const ref=db.collection('nhData').doc('main');
-
-  // สร้าง flat update object ด้วย dot-notation
-  // เพื่อ update เฉพาะ field ที่เปลี่ยน ไม่ทับ field อื่น
-  function flattenForUpdate(obj, prefix, result){
-    result=result||{};
-    for(var k in obj){
-      if(!obj.hasOwnProperty(k))continue;
-      var val=obj[k];
-      var newKey=prefix?prefix+'.'+k:k;
-      if(val!==null&&typeof val==='object'&&!Array.isArray(val)&&Object.keys(val).length>0){
-        flattenForUpdate(val,newKey,result);
-      } else {
-        result[newKey]=val;
-      }
-    }
-    return result;
-  }
-
-  // ใช้ dot-notation สำหรับ logs และ supplyLogs (nested deep)
-  // ใช้ set ปกติสำหรับ patients, acts (array)
-  var updateObj={
-    patients:dataNoPhotos.patients||[],
-    acts:dataNoPhotos.acts||[],
-    _savedAt:dataNoPhotos._savedAt||Date.now()
-  };
-
-  // flatten logs และ supplyLogs
-  if(dataNoPhotos.logs){
-    var flatLogs=flattenForUpdate(dataNoPhotos.logs,'logs');
-    for(var k in flatLogs)updateObj[k]=flatLogs[k];
-  }
-  if(dataNoPhotos.supplyLogs){
-    var flatSupply=flattenForUpdate(dataNoPhotos.supplyLogs,'supplyLogs');
-    for(var k in flatSupply)updateObj[k]=flatSupply[k];
-  }
-
-  ref.update(updateObj)
-    .catch(function(){
-      // ถ้า doc ยังไม่มี → ใช้ set แทน
-      return ref.set(dataNoPhotos,{merge:true});
-    })
+  db.collection('nhData').doc('main').set(dataNoPhotos,{merge:true})
     .then(function(){
       fbLastSave=Date.now();
       showSyncStatus('✅ ซิงค์ '+new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}));
