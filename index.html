@@ -1551,7 +1551,8 @@ function rPats(){
   if(!S.patients.length){list.innerHTML='<div class="empty"><div class="ei">👴</div>ยังไม่มีข้อมูลผู้สูงอายุ<br><small>กด "เพิ่ม" เพื่อเริ่มต้น</small></div>';return;}
   list.innerHTML=sortPatients(S.patients).map(function(p){
     const sh=aSh[p.id]||'D';
-    const lg=gLog(p.id,curDate,sh);
+    const shDate=getShiftDate(sh);
+    const lg=gLog(p.id,shDate,sh);
     const isOpen=oC[p.id]||false; // default ปิด
     const ini=p.name.replace(/คุณ|นาย|นาง|นางสาว/g,'').trim().charAt(0)||'?';
     const defaultT=sh==='D'?DEFAULT_TASKS_D:DEFAULT_TASKS_N;
