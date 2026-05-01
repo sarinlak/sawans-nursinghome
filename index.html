@@ -849,7 +849,39 @@ function pushToFirebase(){
   if(!db)return;
   const{photos,...dataNoPhotos}=S;
   showSyncStatus('⏳ กำลังซิงค์...');
-  db.collection('nhData').doc('main').set(dataNoPhotos,{merge:true})
+
+  // บันทึก patients, acts, config ใน main document
+  const mainData={
+    patients:dataNoPhotos.patients||[],
+    acts:dataNoPhotos.acts||[],
+    nhConfig:dataNoPhotos.nhConfig||{},
+    _savedAt:dataNoPhotos._savedAt||Date.now()
+  };
+
+  // บันทึก logs แต่ละคนใน document แยก → ป้องกันทับกัน
+  const promises=[db.collection('nhData').doc('main').set(mainData,{merge:true})];
+
+  // logs per patient
+  const logs=dataNoPhotos.logs||{};
+  Object.keys(logs).forEach(function(pid){
+    if(logs[pid]&&Object.keys(logs[pid]).length>0){
+      promises.push(
+        db.collection('nhData').doc('logs_'+pid).set(logs[pid],{merge:true})
+      );
+    }
+  });
+
+  // supplyLogs per patient
+  const supplyLogs=dataNoPhotos.supplyLogs||{};
+  Object.keys(supplyLogs).forEach(function(pid){
+    if(supplyLogs[pid]&&Object.keys(supplyLogs[pid]).length>0){
+      promises.push(
+        db.collection('nhData').doc('supply_'+pid).set(supplyLogs[pid],{merge:true})
+      );
+    }
+  });
+
+  Promise.all(promises)
     .then(function(){
       fbLastSave=Date.now();
       showSyncStatus('✅ ซิงค์ '+new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}));
@@ -911,29 +943,62 @@ function initFirebase(cfg){
 
     if(fbUnsubscribe)fbUnsubscribe();
     let fbFirstLoad=true;
+    const patientListeners=[];
+
+    function subscribePatientLogs(){
+      // ยกเลิก listeners เก่า
+      patientListeners.forEach(function(unsub){try{unsub();}catch(e){}});
+      patientListeners.length=0;
+
+      (S.patients||[]).forEach(function(p){
+        // listen logs
+        var unsubLog=db.collection('nhData').doc('logs_'+p.id).onSnapshot({includeMetadataChanges:false},function(d){
+          if(!d.exists)return;
+          if(!S.logs)S.logs={};
+          S.logs[p.id]=deepMergeSafe(S.logs[p.id]||{},d.data());
+          try{const{photos,...dd}=S;localStorage.setItem(DK,JSON.stringify(dd));}catch(e){}
+          renderAll();
+          showSyncStatus('☁️ ซิงค์แล้ว — realtime');
+        },function(){});
+        patientListeners.push(unsubLog);
+
+        // listen supply
+        var unsubSup=db.collection('nhData').doc('supply_'+p.id).onSnapshot({includeMetadataChanges:false},function(d){
+          if(!d.exists)return;
+          if(!S.supplyLogs)S.supplyLogs={};
+          S.supplyLogs[p.id]=deepMergeSafe(S.supplyLogs[p.id]||{},d.data());
+          try{const{photos,...dd}=S;localStorage.setItem(DK,JSON.stringify(dd));}catch(e){}
+          renderAll();
+        },function(){});
+        patientListeners.push(unsubSup);
+      });
+    }
+
     fbUnsubscribe=db.collection('nhData').doc('main').onSnapshot({includeMetadataChanges:false},snap=>{
       if(!snap.exists){pushToFirebase();showSyncStatus('☁️ อัปโหลดข้อมูลครั้งแรก...');fbFirstLoad=false;return;}
       const remote=snap.data();
       const remoteSavedAt=remote._savedAt||0;
       const localSavedAt=S._savedAt||0;
 
-      // ข้ามเฉพาะเมื่อเป็น echo ของตัวเอง (timestamp เหมือนกัน)
       if(!fbFirstLoad&&remoteSavedAt>0&&remoteSavedAt===localSavedAt)return;
+
+      const wasFirstLoad=fbFirstLoad;
       fbFirstLoad=false;
 
-      // remote ใหม่กว่า → เชื่อ remote เป็นหลัก merge กับ local
-      // local ใหม่กว่า → เชื่อ local เป็นหลัก merge กับ remote
-      if(remoteSavedAt>localSavedAt){
-        S=deepMergeSafe(S,remote); // remote wins
-      } else {
-        S=deepMergeSafe(remote,S); // local wins
+      // update patients list
+      if(remoteSavedAt>=localSavedAt){
+        S.patients=remote.patients||S.patients;
+        S.acts=remote.acts||S.acts;
+        S.nhConfig=remote.nhConfig||S.nhConfig;
+        S._savedAt=remoteSavedAt;
       }
-      S._savedAt=Math.max(remoteSavedAt,localSavedAt);
-      try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
 
-      // render เสมอ — ไม่ block แม้กำลังพิมพ์
+      try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
       renderAll();
       showSyncStatus('☁️ ซิงค์แล้ว — realtime');
+
+      // subscribe per-patient listeners ครั้งแรก
+      if(wasFirstLoad)subscribePatientLogs();
     },function(err){showSyncStatus('❌ '+err.message);});
 
 
