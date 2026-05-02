@@ -847,14 +847,26 @@ const saveNow=()=>{save();if(db){clearTimeout(fbSyncTimer);pushToFirebase();}};
 
 function pushToFirebase(){
   if(!db)return;
-  const{photos,...dataNoPhotos}=S;
+  const{photos,logs,...dataNoPhotosNoLogs}=S;
   showSyncStatus('⏳ กำลังซิงค์...');
-  db.collection('nhData').doc('main').set(dataNoPhotos,{merge:true})
+  // push ข้อมูลหลัก (ไม่รวม logs และ photos) ใน nhData/main
+  db.collection('nhData').doc('main').set(dataNoPhotosNoLogs,{merge:true})
     .then(function(){
       fbLastSave=Date.now();
       showSyncStatus('✅ ซิงค์ '+new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}));
+      // push photos แยก
       var chunks=[];for(var i=0;i<photos.length;i+=5)chunks.push(photos.slice(i,i+5));
       if(chunks.length)Promise.all(chunks.map(function(ch,i){return db.collection('nhData').doc('photos_'+i).set({photos:ch,chunk:i});})).catch(function(){});
+      // push logs แยกทีละ pid/date ใน nhLogs collection (document เล็กๆ ไม่เกิน 1MB)
+      var logsObj=logs||{};
+      Object.keys(logsObj).forEach(function(pid){
+        var pidLogs=logsObj[pid]||{};
+        Object.keys(pidLogs).forEach(function(date){
+          var dateLog=pidLogs[date]||{};
+          if(Object.keys(dateLog).length===0)return;
+          db.collection('nhLogs').doc(pid+'_'+date).set(dateLog,{merge:true}).catch(function(){});
+        });
+      });
     })
     .catch(function(err){showSyncStatus('⚠️ ซิงค์ไม่ได้: '+(err.code||err.message));});
 }
@@ -916,15 +928,54 @@ function initFirebase(cfg){
       const localSavedAt=S._savedAt||0;
 
       if(!fbFirstLoad&&remoteSavedAt>0&&remoteSavedAt===localSavedAt)return;
-      fbFirstLoad=false;
 
-      // merge ทั้งสองฝั่งเสมอ: local เป็น base, remote เป็น overlay
-      // ทำให้ข้อมูลที่ทำบนเครื่องไหนก็จะรวมกัน ไม่ทับกัน
-      S=deepMergeSafe(S,remote);
-      S._savedAt=Math.max(remoteSavedAt,localSavedAt);
-      try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
-      renderAll();
-      showSyncStatus('☁️ ซิงค์แล้ว — realtime');
+      if(fbFirstLoad){
+        // ครั้งแรก: โหลด logs ทั้งหมดจาก nhLogs collection แยก
+        fbFirstLoad=false;
+        // merge nhData/main (ไม่มี logs)
+        S=deepMergeSafe(S,remote);
+        S._savedAt=Math.max(remoteSavedAt,localSavedAt);
+        // โหลด logs จาก nhLogs
+        db.collection('nhLogs').get().then(function(qs){
+          if(!S.logs)S.logs={};
+          qs.forEach(function(doc){
+            var parts=doc.id.split('_');
+            var pid=parts[0];
+            var date=parts.slice(1).join('_');
+            if(!S.logs[pid])S.logs[pid]={};
+            S.logs[pid][date]=doc.data();
+          });
+          try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
+          renderAll();
+          showSyncStatus('☁️ ซิงค์แล้ว — realtime');
+          // listen nhLogs realtime
+          db.collection('nhLogs').onSnapshot({includeMetadataChanges:false},function(qs){
+            if(!S.logs)S.logs={};
+            qs.docChanges().forEach(function(change){
+              if(change.type==='removed')return;
+              var parts=change.doc.id.split('_');
+              var pid=parts[0];
+              var date=parts.slice(1).join('_');
+              if(!S.logs[pid])S.logs[pid]={};
+              S.logs[pid][date]=change.doc.data();
+            });
+            try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
+            renderAll();
+            showSyncStatus('☁️ ซิงค์แล้ว — realtime');
+          },function(){});
+        }).catch(function(){
+          try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
+          renderAll();
+          showSyncStatus('☁️ ซิงค์แล้ว — realtime');
+        });
+      } else {
+        // realtime update จาก nhData/main
+        S=deepMergeSafe(S,remote);
+        S._savedAt=Math.max(remoteSavedAt,localSavedAt);
+        try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
+        renderAll();
+        showSyncStatus('☁️ ซิงค์แล้ว — realtime');
+      }
     },function(err){showSyncStatus('❌ '+err.message);});
 
 
