@@ -819,7 +819,7 @@ const FB_CFG_KEY='sawanNH_fbConfig';
 // ---- SAVE — always local first, then Firebase debounced ----
 const save=()=>{
   lastEditTime=Date.now();
-  S._savedAt=Date.now()*1000+Math.floor(Math.random()*999);
+  S._savedAt=Date.now(); // timestamp ของ save ล่าสุด
   try{
     const {photos,...dataNoPhotos}=S;
     localStorage.setItem(DK,JSON.stringify(dataNoPhotos));
@@ -849,22 +849,20 @@ function pushToFirebase(){
   if(!db)return;
   const{photos,logs,...dataNoPhotosNoLogs}=S;
   showSyncStatus('⏳ กำลังซิงค์...');
-  // push ข้อมูลหลัก (ไม่รวม logs และ photos) ใน nhData/main
+  // push ข้อมูลหลักโดยไม่รวม logs (เพื่อไม่ให้ document เกิน 1MB)
   db.collection('nhData').doc('main').set(dataNoPhotosNoLogs,{merge:true})
     .then(function(){
       fbLastSave=Date.now();
       showSyncStatus('✅ ซิงค์ '+new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}));
-      // push photos แยก
       var chunks=[];for(var i=0;i<photos.length;i+=5)chunks.push(photos.slice(i,i+5));
       if(chunks.length)Promise.all(chunks.map(function(ch,i){return db.collection('nhData').doc('photos_'+i).set({photos:ch,chunk:i});})).catch(function(){});
-      // push logs แยกทีละ pid/date ใน nhLogs collection (document เล็กๆ ไม่เกิน 1MB)
-      var logsObj=logs||{};
+      // push logs แยกทีละ pid/date ใน nhLogs (document เล็กๆ ไม่เกิน 1MB)
+      var logsObj=S.logs||{};
       Object.keys(logsObj).forEach(function(pid){
-        var pidLogs=logsObj[pid]||{};
-        Object.keys(pidLogs).forEach(function(date){
-          var dateLog=pidLogs[date]||{};
-          if(Object.keys(dateLog).length===0)return;
-          db.collection('nhLogs').doc(pid+'_'+date).set(dateLog,{merge:true}).catch(function(){});
+        Object.keys(logsObj[pid]||{}).forEach(function(date){
+          var d=logsObj[pid][date]||{};
+          if(Object.keys(d).length===0)return;
+          db.collection('nhLogs').doc(pid+'_'+date).set(d,{merge:true}).catch(function(){});
         });
       });
     })
@@ -879,8 +877,8 @@ function deepMergeSafe(base,overlay){
     if(typeof overlay==='boolean')return overlay;
     // number: overlay wins ถ้ามีค่า (รวม 0 ด้วย — 0 หมายถึงไม่มีแพมเพิส ฯลฯ)
     if(typeof overlay==='number')return overlay;
-    // string: overlay wins เสมอ รวม '' ด้วย
-    return overlay;
+    // string: overlay wins ถ้ามีค่า, ไม่อย่างนั้นเก็บ base
+    return overlay; // overlay ชนะเสมอ รวม ''
   }
   const result={};
   const keys=new Set([...Object.keys(base||{}),...Object.keys(overlay)]);
@@ -928,14 +926,14 @@ function initFirebase(cfg){
       const localSavedAt=S._savedAt||0;
 
       if(!fbFirstLoad&&remoteSavedAt>0&&remoteSavedAt===localSavedAt)return;
+      fbFirstLoad=false;
 
+      // merge remote เข้า local (remote ชนะ)
+      S=deepMergeSafe(S,remote);
+      S._savedAt=Math.max(remoteSavedAt,localSavedAt);
+
+      // ครั้งแรก: โหลด logs จาก nhLogs และ listen realtime
       if(fbFirstLoad){
-        // ครั้งแรก: โหลด logs ทั้งหมดจาก nhLogs collection แยก
-        fbFirstLoad=false;
-        // merge nhData/main (ไม่มี logs)
-        S=deepMergeSafe(S,remote);
-        S._savedAt=Math.max(remoteSavedAt,localSavedAt);
-        // โหลด logs จาก nhLogs
         db.collection('nhLogs').get().then(function(qs){
           if(!S.logs)S.logs={};
           qs.forEach(function(doc){
@@ -961,7 +959,6 @@ function initFirebase(cfg){
             });
             try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
             renderAll();
-            showSyncStatus('☁️ ซิงค์แล้ว — realtime');
           },function(){});
         }).catch(function(){
           try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
@@ -969,13 +966,11 @@ function initFirebase(cfg){
           showSyncStatus('☁️ ซิงค์แล้ว — realtime');
         });
       } else {
-        // realtime update จาก nhData/main
-        S=deepMergeSafe(S,remote);
-        S._savedAt=Math.max(remoteSavedAt,localSavedAt);
         try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
         renderAll();
         showSyncStatus('☁️ ซิงค์แล้ว — realtime');
       }
+      fbFirstLoad=false;
     },function(err){showSyncStatus('❌ '+err.message);});
 
 
