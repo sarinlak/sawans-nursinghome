@@ -846,26 +846,31 @@ const save=()=>{
 // saveNow รับ pid ที่เปลี่ยนแปลง เพื่อ push เฉพาะ pid นั้น
 const saveNow=(changedPid)=>{save();if(db){clearTimeout(fbSyncTimer);pushToFirebase(changedPid);}};
 
+// pushLog: push เฉพาะ log ของ pid ที่เปลี่ยน (ใช้ตอนติ๊กงาน) — ประหยัด writes มาก
+function pushLog(pid){
+  if(!db||!pid)return;
+  var todayPush=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'});
+  var dateLog=S.logs&&S.logs[pid]&&S.logs[pid][todayPush];
+  if(!dateLog||Object.keys(dateLog).length===0)return;
+  showSyncStatus('⏳ กำลังซิงค์...');
+  db.collection('nhLogs').doc(todayPush+'_'+pid).set(dateLog,{merge:true})
+    .then(function(){showSyncStatus('✅ ซิงค์ '+new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}));})
+    .catch(function(err){showSyncStatus('⚠️ ซิงค์ไม่ได้: '+(err.code||err.message));});
+}
+
+// pushToFirebase: push nhData/main (ใช้ตอน patients/acts/config เปลี่ยน)
 function pushToFirebase(changedPid){
   if(!db)return;
+  // ถ้าเป็นการติ๊กงาน (มี changedPid) ให้ push แค่ log ไม่ต้อง push nhData/main
+  if(changedPid){pushLog(changedPid);return;}
   const{photos,logs,...dataNoPhotosNoLogs}=S;
   showSyncStatus('⏳ กำลังซิงค์...');
-  // push ข้อมูลหลักโดยไม่รวม logs (เพื่อไม่ให้ document เกิน 1MB)
   db.collection('nhData').doc('main').set(dataNoPhotosNoLogs,{merge:true})
     .then(function(){
       fbLastSave=Date.now();
       showSyncStatus('✅ ซิงค์ '+new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}));
       var chunks=[];for(var i=0;i<photos.length;i+=5)chunks.push(photos.slice(i,i+5));
       if(chunks.length)Promise.all(chunks.map(function(ch,i){return db.collection('nhData').doc('photos_'+i).set({photos:ch,chunk:i});})).catch(function(){});
-      // push logs เฉพาะ pid ที่เพิ่งเปลี่ยนแปลง + วันปัจจุบันเท่านั้น (1 write ต่อการติ๊ก)
-      var todayPush=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'});
-      var logsObj=S.logs||{};
-      var pidsToPush=changedPid?[changedPid]:Object.keys(logsObj);
-      pidsToPush.forEach(function(pid){
-        var dateLog=logsObj[pid]&&logsObj[pid][todayPush];
-        if(!dateLog||Object.keys(dateLog).length===0)return;
-        db.collection('nhLogs').doc(todayPush+'_'+pid).set(dateLog,{merge:true}).catch(function(){});
-      });
     })
     .catch(function(err){showSyncStatus('⚠️ ซิงค์ไม่ได้: '+(err.code||err.message));});
 }
