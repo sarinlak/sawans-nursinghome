@@ -869,7 +869,13 @@ function pushLog(pid,date){
   var docData=Object.assign({},cleanDay,{_date:targetDate,_pid:pid});
   showSyncStatus('⏳ กำลังซิงค์...');
   db.collection('nhLogs').doc(pid+'_'+targetDate).set(docData,{merge:true})
-    .then(function(){showSyncStatus('✅ ซิงค์ '+new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}));})
+    .then(function(){
+      // update _savedAt ใน nhData/main เพื่อ trigger listener ของเครื่องอื่น
+      var newSavedAt=Date.now()*1000+Math.floor(Math.random()*999);
+      S._savedAt=newSavedAt;
+      db.collection('nhData').doc('main').update({_savedAt:newSavedAt}).catch(function(){});
+      showSyncStatus('✅ ซิงค์ '+new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}));
+    })
     .catch(function(err){showSyncStatus('⚠️ ซิงค์ไม่ได้: '+(err.code||err.message));});
 }
 
@@ -983,35 +989,16 @@ function initFirebase(cfg){
             try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
             renderAll();
             showSyncStatus('☁️ ซิงค์แล้ว — realtime');
-            // listen nhLogs realtime — skip initial snapshot (ป้องกัน reads เยอะตอน subscribe)
-            var nhLogsFirstSnap=true;
-            db.collection('nhLogs').onSnapshot({includeMetadataChanges:false},function(qs){
-              if(nhLogsFirstSnap){nhLogsFirstSnap=false;return;} // skip initial
-              if(!S.logs)S.logs={};
-              qs.docChanges().forEach(function(change){
-                if(change.type==='removed')return;
-                var d=change.doc.data();
-                var pid,date;
-                if(d._pid&&d._date){
-                  pid=String(d._pid);
-                  date=d._date;
-                } else {
-                  var parts=change.doc.id.split('_');
-                  pid=parts[0];
-                  date=parts.slice(1).join('_');
-                }
-                if(!pid||!date)return;
-                if(!S.logs[pid])S.logs[pid]={};
-                var dayData=Object.assign({},d);
-                delete dayData._date;delete dayData._pid;
-                S.logs[pid][date]=dayData;
-                try{const{photos,...d2}=S;localStorage.setItem(DK,JSON.stringify(d2));}catch(e){}
-                renderAll();
-              });
-            },function(){});
+            // ไม่ subscribe nhLogs ทั้ง collection (กิน reads เยอะมาก)
+            // แทนที่ด้วยการ reload วันที่แสดงอยู่เมื่อ nhData/main มีการเปลี่ยนแปลง
+            // ซึ่ง nhData/main listener ข้างบนจะ handle แล้ว
           }
         } // end checkInitDone
       } else {
+        // reload logs วันที่แสดงอยู่ตอนนี้ (ไม่โหลดซ้ำถ้ามีแล้ว เว้นแต่วันนี้)
+        var curDateForReload=curDate||new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'});
+        if(_loadedDates)delete _loadedDates[curDateForReload]; // force reload วันที่แสดงอยู่
+        loadLogsForDate(curDateForReload);
         try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
         renderAll();
         showSyncStatus('☁️ ซิงค์แล้ว — realtime');
