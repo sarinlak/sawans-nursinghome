@@ -870,10 +870,14 @@ function pushLog(pid,date){
   showSyncStatus('⏳ กำลังซิงค์...');
   db.collection('nhLogs').doc(pid+'_'+targetDate).set(docData,{merge:true})
     .then(function(){
-      // update _savedAt ใน nhData/main เพื่อ trigger listener ของเครื่องอื่น
+      // update _savedAt + lastLog ใน nhData/main เพื่อแจ้งเครื่องอื่นว่า pid/date ไหนเปลี่ยน
       var newSavedAt=Date.now()*1000+Math.floor(Math.random()*999);
       S._savedAt=newSavedAt;
-      db.collection('nhData').doc('main').update({_savedAt:newSavedAt}).catch(function(){});
+      db.collection('nhData').doc('main').update({
+        _savedAt:newSavedAt,
+        _lastLogPid:pid,
+        _lastLogDate:targetDate
+      }).catch(function(){});
       showSyncStatus('✅ ซิงค์ '+new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}));
     })
     .catch(function(err){showSyncStatus('⚠️ ซิงค์ไม่ได้: '+(err.code||err.message));});
@@ -995,12 +999,25 @@ function initFirebase(cfg){
           }
         } // end checkInitDone
       } else {
-        // reload logs วันที่แสดงอยู่ตอนนี้ (ไม่โหลดซ้ำถ้ามีแล้ว เว้นแต่วันนี้)
-        var curDateForReload=curDate||new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'});
-        if(_loadedDates)delete _loadedDates[curDateForReload]; // force reload วันที่แสดงอยู่
-        loadLogsForDate(curDateForReload);
-        try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
-        renderAll();
+        // ถ้ามี _lastLogPid และ _lastLogDate → โหลดเฉพาะ doc นั้น (1 read เท่านั้น!)
+        var remoteLogPid=remote._lastLogPid;
+        var remoteLogDate=remote._lastLogDate;
+        if(remoteLogPid&&remoteLogDate){
+          db.collection('nhLogs').doc(remoteLogPid+'_'+remoteLogDate).get().then(function(doc){
+            if(doc.exists){
+              if(!S.logs[remoteLogPid])S.logs[remoteLogPid]={};
+              var d2=doc.data();
+              var dayData=Object.assign({},d2);
+              delete dayData._date;delete dayData._pid;
+              S.logs[remoteLogPid][remoteLogDate]=dayData;
+            }
+            try{const{photos,...d3}=S;localStorage.setItem(DK,JSON.stringify(d3));}catch(e){}
+            renderAll();
+          }).catch(function(){renderAll();});
+        } else {
+          try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
+          renderAll();
+        }
         showSyncStatus('☁️ ซิงค์แล้ว — realtime');
       }
       fbFirstLoad=false;
