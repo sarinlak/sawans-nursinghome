@@ -844,7 +844,7 @@ const save=()=>{
 
 // saveNow — push Firebase ทันทีไม่รอ debounce (ใช้กับการติ๊ก)
 // saveNow รับ pid ที่เปลี่ยนแปลง เพื่อ push เฉพาะ pid นั้น
-const saveNow=(changedPid)=>{save();if(db){clearTimeout(fbSyncTimer);pushToFirebase(changedPid);}};
+const saveNow=(changedPid)=>{save();if(db){clearTimeout(fbSyncTimer);pushToFirebase(changedPid,curDate);}};
 
 // ลบ undefined/null ออกจาก object ก่อน push Firebase
 function cleanForFirebase(obj){
@@ -858,27 +858,26 @@ function cleanForFirebase(obj){
   return result;
 }
 
-// pushLog: push log ของ pid เฉพาะวันที่เปลี่ยน — format: pid_date (1 doc ต่อ 1 คน 1 วัน)
-function pushLog(pid){
+// pushLog: push log ของ pid และวันที่ระบุ — format: pid_date
+function pushLog(pid,date){
   if(!db||!pid)return;
-  var todayPush=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'});
-  var dayLog=S.logs&&S.logs[pid]&&S.logs[pid][todayPush];
+  var targetDate=date||new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'});
+  var dayLog=S.logs&&S.logs[pid]&&S.logs[pid][targetDate];
   if(!dayLog)return;
   var cleanDay=cleanForFirebase(dayLog);
   if(!cleanDay||Object.keys(cleanDay).length===0)return;
-  // เพิ่ม _date เพื่อให้ query ได้ + ใช้ format pid_date ตรงกับ Firebase จริง
-  var docData=Object.assign({},cleanDay,{_date:todayPush,_pid:pid});
+  var docData=Object.assign({},cleanDay,{_date:targetDate,_pid:pid});
   showSyncStatus('⏳ กำลังซิงค์...');
-  db.collection('nhLogs').doc(pid+'_'+todayPush).set(docData,{merge:true})
+  db.collection('nhLogs').doc(pid+'_'+targetDate).set(docData,{merge:true})
     .then(function(){showSyncStatus('✅ ซิงค์ '+new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}));})
     .catch(function(err){showSyncStatus('⚠️ ซิงค์ไม่ได้: '+(err.code||err.message));});
 }
 
 // pushToFirebase: push nhData/main (ใช้ตอน patients/acts/config เปลี่ยน)
-function pushToFirebase(changedPid){
+function pushToFirebase(changedPid,changedDate){
   if(!db)return;
   // ถ้าเป็นการติ๊กงาน (มี changedPid) ให้ push แค่ log ไม่ต้อง push nhData/main
-  if(changedPid){pushLog(changedPid);return;}
+  if(changedPid){pushLog(changedPid,changedDate);return;}
   const{photos,logs,...dataNoPhotosNoLogs}=S;
   showSyncStatus('⏳ กำลังซิงค์...');
   db.collection('nhData').doc('main').set(dataNoPhotosNoLogs,{merge:true})
