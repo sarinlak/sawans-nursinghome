@@ -846,14 +846,13 @@ const save=()=>{
 // saveNow รับ pid ที่เปลี่ยนแปลง เพื่อ push เฉพาะ pid นั้น
 const saveNow=(changedPid)=>{save();if(db){clearTimeout(fbSyncTimer);pushToFirebase(changedPid);}};
 
-// pushLog: push เฉพาะ log ของ pid ที่เปลี่ยน (ใช้ตอนติ๊กงาน) — ประหยัด writes มาก
+// pushLog: push log ของ pid ที่เปลี่ยน — 1 document ต่อ 1 คนไข้ (format: logs_pid)
 function pushLog(pid){
   if(!db||!pid)return;
-  var todayPush=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'});
-  var dateLog=S.logs&&S.logs[pid]&&S.logs[pid][todayPush];
-  if(!dateLog||Object.keys(dateLog).length===0)return;
+  var pidLog=S.logs&&S.logs[pid];
+  if(!pidLog||Object.keys(pidLog).length===0)return;
   showSyncStatus('⏳ กำลังซิงค์...');
-  db.collection('nhLogs').doc(todayPush+'_'+pid).set(dateLog,{merge:true})
+  db.collection('nhLogs').doc('logs_'+pid).set(pidLog,{merge:true})
     .then(function(){showSyncStatus('✅ ซิงค์ '+new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}));})
     .catch(function(err){showSyncStatus('⚠️ ซิงค์ไม่ได้: '+(err.code||err.message));});
 }
@@ -944,18 +943,17 @@ function initFirebase(cfg){
         // โหลด nhLogs เฉพาะวันปัจจุบัน — ประหยัด quota
         var todayStr=(function(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();
         // query เฉพาะวันนี้โดยใช้ format date_pid
-        db.collection('nhLogs')
-          .where(firebase.firestore.FieldPath.documentId(),'>=',todayStr+'_')
-          .where(firebase.firestore.FieldPath.documentId(),'<=',todayStr+'_￿')
-          .get().then(function(qs){
+        db.collection('nhLogs').get().then(function(qs){
           if(!S.logs)S.logs={};
           qs.forEach(function(doc){
-            // รองรับ format ใหม่ date_pid
-            var underIdx=doc.id.indexOf('_');
-            var date=doc.id.substring(0,underIdx);
-            var pid=doc.id.substring(underIdx+1);
-            if(!S.logs[pid])S.logs[pid]={};
-            S.logs[pid][date]=doc.data();
+            // format: logs_pid — 1 document ต่อ 1 คนไข้ มีทุกวันอยู่ข้างใน
+            var pid=doc.id.replace(/^logs_/,'');
+            var pidData=doc.data();
+            // โหลดแค่วันนี้เพื่อประหยัด memory (วันอื่นโหลดเมื่อกดดู)
+            if(pidData[todayStr]){
+              if(!S.logs[pid])S.logs[pid]={};
+              S.logs[pid][todayStr]=pidData[todayStr];
+            }
           });
           try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
           renderAll();
@@ -965,22 +963,14 @@ function initFirebase(cfg){
             if(!S.logs)S.logs={};
             qs.docChanges().forEach(function(change){
               if(change.type==='removed')return;
-              // รองรับทั้ง format เก่า pid_date และใหม่ date_pid
-              var docId=change.doc.id;
-              var pid,date;
-              // format ใหม่: date_pid (date มี format YYYY-MM-DD)
-              if(/^\d{4}-\d{2}-\d{2}_/.test(docId)){
-                var underIdx=docId.indexOf('_');
-                date=docId.substring(0,underIdx);
-                pid=docId.substring(underIdx+1);
-              } else {
-                // format เก่า: pid_date
-                var parts=docId.split('_');
-                pid=parts[0];
-                date=parts.slice(1).join('_');
-              }
+              // format: logs_pid — merge ข้อมูลทุกวันเข้า S.logs[pid]
+              var pid=change.doc.id.replace(/^logs_/,'');
+              var pidData=change.doc.data();
               if(!S.logs[pid])S.logs[pid]={};
-              S.logs[pid][date]=change.doc.data();
+              // merge ทุกวันจาก document เข้า local
+              Object.keys(pidData).forEach(function(date){
+                S.logs[pid][date]=pidData[date];
+              });
             });
             try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
             renderAll();
@@ -1243,19 +1233,17 @@ function loadLogsForDate(dateStr){
     });
   }
   if(hasData)return; // มีแล้วไม่ต้องโหลดซ้ำ
-  // โหลดจาก Firebase เฉพาะวันที่เลือก (query by date_pid format)
-  db.collection('nhLogs')
-    .where(firebase.firestore.FieldPath.documentId(),'>=',dateStr+'_')
-    .where(firebase.firestore.FieldPath.documentId(),'<=',dateStr+'_￿')
-    .get().then(function(qs){
+  // โหลดจาก Firebase เฉพาะวันที่เลือก — format logs_pid
+  db.collection('nhLogs').get().then(function(qs){
     if(!S.logs)S.logs={};
     qs.forEach(function(doc){
-      // format: date_pid
-      var underIdx=doc.id.indexOf('_');
-      var date=doc.id.substring(0,underIdx);
-      var pid=doc.id.substring(underIdx+1);
-      if(!S.logs[pid])S.logs[pid]={};
-      S.logs[pid][date]=doc.data();
+      // format: logs_pid — ดึงเฉพาะวันที่ต้องการจาก document
+      var pid=doc.id.replace(/^logs_/,'');
+      var pidData=doc.data();
+      if(pidData[dateStr]){
+        if(!S.logs[pid])S.logs[pid]={};
+        S.logs[pid][dateStr]=pidData[dateStr];
+      }
     });
     try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
     renderAll();
