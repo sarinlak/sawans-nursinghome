@@ -983,8 +983,10 @@ function initFirebase(cfg){
             try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
             renderAll();
             showSyncStatus('☁️ ซิงค์แล้ว — realtime');
-            // listen nhLogs realtime
+            // listen nhLogs realtime — skip initial snapshot (ป้องกัน reads เยอะตอน subscribe)
+            var nhLogsFirstSnap=true;
             db.collection('nhLogs').onSnapshot({includeMetadataChanges:false},function(qs){
+              if(nhLogsFirstSnap){nhLogsFirstSnap=false;return;} // skip initial
               if(!S.logs)S.logs={};
               qs.docChanges().forEach(function(change){
                 if(change.type==='removed')return;
