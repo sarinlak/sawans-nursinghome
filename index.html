@@ -843,9 +843,10 @@ const save=()=>{
 };
 
 // saveNow — push Firebase ทันทีไม่รอ debounce (ใช้กับการติ๊ก)
-const saveNow=()=>{save();if(db){clearTimeout(fbSyncTimer);pushToFirebase();}};
+// saveNow รับ pid ที่เปลี่ยนแปลง เพื่อ push เฉพาะ pid นั้น
+const saveNow=(changedPid)=>{save();if(db){clearTimeout(fbSyncTimer);pushToFirebase(changedPid);}};
 
-function pushToFirebase(){
+function pushToFirebase(changedPid){
   if(!db)return;
   const{photos,logs,...dataNoPhotosNoLogs}=S;
   showSyncStatus('⏳ กำลังซิงค์...');
@@ -856,14 +857,14 @@ function pushToFirebase(){
       showSyncStatus('✅ ซิงค์ '+new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}));
       var chunks=[];for(var i=0;i<photos.length;i+=5)chunks.push(photos.slice(i,i+5));
       if(chunks.length)Promise.all(chunks.map(function(ch,i){return db.collection('nhData').doc('photos_'+i).set({photos:ch,chunk:i});})).catch(function(){});
-      // push logs แยกทีละ pid/date ใน nhLogs (document เล็กๆ ไม่เกิน 1MB)
+      // push logs เฉพาะ pid ที่เพิ่งเปลี่ยนแปลง + วันปัจจุบันเท่านั้น (1 write ต่อการติ๊ก)
+      var todayPush=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'});
       var logsObj=S.logs||{};
-      Object.keys(logsObj).forEach(function(pid){
-        Object.keys(logsObj[pid]||{}).forEach(function(date){
-          var d=logsObj[pid][date]||{};
-          if(Object.keys(d).length===0)return;
-          db.collection('nhLogs').doc(pid+'_'+date).set(d,{merge:true}).catch(function(){});
-        });
+      var pidsToPush=changedPid?[changedPid]:Object.keys(logsObj);
+      pidsToPush.forEach(function(pid){
+        var dateLog=logsObj[pid]&&logsObj[pid][todayPush];
+        if(!dateLog||Object.keys(dateLog).length===0)return;
+        db.collection('nhLogs').doc(todayPush+'_'+pid).set(dateLog,{merge:true}).catch(function(){});
       });
     })
     .catch(function(err){showSyncStatus('⚠️ ซิงค์ไม่ได้: '+(err.code||err.message));});
@@ -925,7 +926,8 @@ function initFirebase(cfg){
       const remoteSavedAt=remote._savedAt||0;
       const localSavedAt=S._savedAt||0;
 
-      if(!fbFirstLoad&&remoteSavedAt>0&&remoteSavedAt===localSavedAt)return;
+      const wasFirst=fbFirstLoad;
+      if(!wasFirst&&remoteSavedAt>0&&remoteSavedAt===localSavedAt)return;
       fbFirstLoad=false;
 
       // merge remote เข้า local (remote ชนะ)
@@ -933,27 +935,45 @@ function initFirebase(cfg){
       S._savedAt=Math.max(remoteSavedAt,localSavedAt);
 
       // ครั้งแรก: โหลด logs จาก nhLogs และ listen realtime
-      if(fbFirstLoad){
-        db.collection('nhLogs').get().then(function(qs){
+      if(wasFirst){
+        // โหลด nhLogs เฉพาะวันปัจจุบัน — ประหยัด quota
+        var todayStr=(function(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();
+        // query เฉพาะวันนี้โดยใช้ format date_pid
+        db.collection('nhLogs')
+          .where(firebase.firestore.FieldPath.documentId(),'>=',todayStr+'_')
+          .where(firebase.firestore.FieldPath.documentId(),'<=',todayStr+'_￿')
+          .get().then(function(qs){
           if(!S.logs)S.logs={};
           qs.forEach(function(doc){
-            var parts=doc.id.split('_');
-            var pid=parts[0];
-            var date=parts.slice(1).join('_');
+            // รองรับ format ใหม่ date_pid
+            var underIdx=doc.id.indexOf('_');
+            var date=doc.id.substring(0,underIdx);
+            var pid=doc.id.substring(underIdx+1);
             if(!S.logs[pid])S.logs[pid]={};
             S.logs[pid][date]=doc.data();
           });
           try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
           renderAll();
           showSyncStatus('☁️ ซิงค์แล้ว — realtime');
-          // listen nhLogs realtime
+          // listen nhLogs realtime (เฉพาะการเปลี่ยนแปลง)
           db.collection('nhLogs').onSnapshot({includeMetadataChanges:false},function(qs){
             if(!S.logs)S.logs={};
             qs.docChanges().forEach(function(change){
               if(change.type==='removed')return;
-              var parts=change.doc.id.split('_');
-              var pid=parts[0];
-              var date=parts.slice(1).join('_');
+              // รองรับทั้ง format เก่า pid_date และใหม่ date_pid
+              var docId=change.doc.id;
+              var pid,date;
+              // format ใหม่: date_pid (date มี format YYYY-MM-DD)
+              if(/^\d{4}-\d{2}-\d{2}_/.test(docId)){
+                var underIdx=docId.indexOf('_');
+                date=docId.substring(0,underIdx);
+                pid=docId.substring(underIdx+1);
+              } else {
+                // format เก่า: pid_date
+                var parts=docId.split('_');
+                pid=parts[0];
+                date=parts.slice(1).join('_');
+              }
               if(!S.logs[pid])S.logs[pid]={};
               S.logs[pid][date]=change.doc.data();
             });
@@ -1207,9 +1227,38 @@ function sw(name,btn){
 }
 
 // date
-function onDateChange(){curDate=document.getElementById('dateInput').value;renderAll();}
-function moveDate(d){const dt=new Date(curDate+'T00:00:00');dt.setDate(dt.getDate()+d);curDate=dt.toLocaleDateString('en-CA');document.getElementById('dateInput').value=curDate;renderAll();}
-function goToday(){curDate=tday();document.getElementById('dateInput').value=curDate;renderAll();}
+// โหลด logs ของวันที่ระบุจาก Firebase (ถ้ายังไม่มีใน local)
+function loadLogsForDate(dateStr){
+  if(!db)return;
+  // เช็คว่ามีข้อมูลวันนั้นใน local แล้วไหม
+  var hasData=false;
+  if(S.logs){
+    Object.keys(S.logs).forEach(function(pid){
+      if(S.logs[pid]&&S.logs[pid][dateStr])hasData=true;
+    });
+  }
+  if(hasData)return; // มีแล้วไม่ต้องโหลดซ้ำ
+  // โหลดจาก Firebase เฉพาะวันที่เลือก (query by date_pid format)
+  db.collection('nhLogs')
+    .where(firebase.firestore.FieldPath.documentId(),'>=',dateStr+'_')
+    .where(firebase.firestore.FieldPath.documentId(),'<=',dateStr+'_￿')
+    .get().then(function(qs){
+    if(!S.logs)S.logs={};
+    qs.forEach(function(doc){
+      // format: date_pid
+      var underIdx=doc.id.indexOf('_');
+      var date=doc.id.substring(0,underIdx);
+      var pid=doc.id.substring(underIdx+1);
+      if(!S.logs[pid])S.logs[pid]={};
+      S.logs[pid][date]=doc.data();
+    });
+    try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
+    renderAll();
+  }).catch(function(){});
+}
+function onDateChange(){curDate=document.getElementById('dateInput').value;loadLogsForDate(curDate);renderAll();}
+function moveDate(d){const dt=new Date(curDate+'T00:00:00');dt.setDate(dt.getDate()+d);curDate=dt.toLocaleDateString('en-CA');document.getElementById('dateInput').value=curDate;loadLogsForDate(curDate);renderAll();}
+function goToday(){curDate=tday();document.getElementById('dateInput').value=curDate;loadLogsForDate(curDate);renderAll();}
 
 // ============================================================
 // WARNINGS & APPOINTMENTS
@@ -1662,7 +1711,7 @@ function tCard(id){
 }
 function sSh(pid,sh,e){if(e)e.stopPropagation();aSh[pid]=sh;rPats();}
 function sShEl(el,e){if(e)e.stopPropagation();sSh(el.dataset.pid,el.dataset.sh,null);}
-function tTask(pid,sh,t){const lg=eLog(pid,curDate,sh);if(!lg.tasks)lg.tasks={};lg.tasks[t]=!lg.tasks[t];saveNow();uPct(pid);}
+function tTask(pid,sh,t){const lg=eLog(pid,curDate,sh);if(!lg.tasks)lg.tasks={};lg.tasks[t]=!lg.tasks[t];saveNow(pid);uPct(pid);}
 function sBath(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.bath=lg.bath===v?null:v;save();
   const cb=document.getElementById('cb-'+pid);
   if(cb&&!cb.classList.contains('h')){const p=S.patients.find(x=>x.id===pid);if(p)cb.innerHTML=rShift(p,sh,eLog(pid,curDate,sh));}
@@ -1683,7 +1732,7 @@ function sFoodMode(pid,sh,mode){const lg=eLog(pid,curDate,sh);lg.foodMode=mode;s
   const cb=document.getElementById('cb-'+pid);
   if(cb&&!cb.classList.contains('h')){const p=S.patients.find(x=>x.id===pid);if(p)cb.innerHTML=rShift(p,sh,eLog(pid,curDate,sh));}
 }
-function tMedKey(pid,sh,key){const lg=eLog(pid,curDate,sh);if(!lg.meds)lg.meds={};lg.meds[key]=!lg.meds[key];saveNow();
+function tMedKey(pid,sh,key){const lg=eLog(pid,curDate,sh);if(!lg.meds)lg.meds={};lg.meds[key]=!lg.meds[key];saveNow(pid);
   const cb=document.getElementById('cb-'+pid);
   if(cb&&!cb.classList.contains('h')){const p=S.patients.find(x=>x.id===pid);if(p)cb.innerHTML=rShift(p,sh,eLog(pid,curDate,sh));}
 }
@@ -1697,7 +1746,7 @@ function tMedMealEl(el){
   const allDone=medNames.every(function(n){return !!lg.meds['sh_med||'+n];});
   // toggle: ถ้าครบแล้ว = untick, ถ้ายังไม่ครบ = tick ทั้งหมด
   medNames.forEach(function(n){lg.meds['sh_med||'+n]=!allDone;});
-  saveNow();
+  saveNow(pid);
   const cb=document.getElementById('cb-'+pid);
   if(cb&&!cb.classList.contains('h')){
     const p=S.patients.find(function(x){return String(x.id)===String(pid);});
@@ -1707,7 +1756,7 @@ function tMedMealEl(el){
 function tMedMeal(pid,sh,medNames,allDone){
   const lg=eLog(pid,curDate,sh);if(!lg.meds)lg.meds={};
   medNames.forEach(function(name){lg.meds['sh_med||'+name]=!allDone;});
-  saveNow();
+  saveNow(pid);
   const cb=document.getElementById('cb-'+pid);
   if(cb&&!cb.classList.contains('h')){const p=S.patients.find(x=>x.id===pid);if(p)cb.innerHTML=rShift(p,sh,eLog(pid,curDate,sh));}
 }
