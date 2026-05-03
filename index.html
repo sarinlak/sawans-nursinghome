@@ -979,6 +979,7 @@ function initFirebase(cfg){
         function checkInitDone(){
           initLoaded++;
           if(initLoaded>=initPids.length){
+            _loadedDates[todayStr]=true; // mark วันนี้ว่าโหลดแล้ว
             try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
             renderAll();
             showSyncStatus('☁️ ซิงค์แล้ว — realtime');
@@ -1256,13 +1257,18 @@ function sw(name,btn){
 
 // date
 // โหลด logs ของวันที่ระบุจาก Firebase (ถ้ายังไม่มีใน local)
+// เก็บว่าวันไหนโหลดแล้วบ้าง เพื่อไม่โหลดซ้ำ
+var _loadedDates={};
 function loadLogsForDate(dateStr){
   if(!db)return;
   if(!S.logs)S.logs={};
-  // โหลดทีละ pid (format pid_date) — 1 read ต่อ 1 คนไข้
-  // วิธีนี้รองรับทั้ง docs เก่าและใหม่ และไม่ต้องสร้าง index
+  var today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'});
+  // ถ้าโหลดแล้วและไม่ใช่วันนี้ → ไม่โหลดซ้ำ (วันเก่าไม่เปลี่ยน)
+  if(_loadedDates[dateStr]&&dateStr!==today)return;
+  _loadedDates[dateStr]=true;
   var allPids=(S.patients||[]).map(function(p){return String(p.id);});
   var loaded=0;
+  if(allPids.length===0)return;
   allPids.forEach(function(pid){
     db.collection('nhLogs').doc(pid+'_'+dateStr).get().then(function(doc){
       if(doc.exists){
@@ -1276,7 +1282,6 @@ function loadLogsForDate(dateStr){
       if(loaded===allPids.length){
         try{const{photos,...d2}=S;localStorage.setItem(DK,JSON.stringify(d2));}catch(e){}
         renderAll();
-        showSyncStatus('☁️ ซิงค์แล้ว — realtime');
       }
     }).catch(function(){loaded++;});
   });
