@@ -846,13 +846,27 @@ const save=()=>{
 // saveNow รับ pid ที่เปลี่ยนแปลง เพื่อ push เฉพาะ pid นั้น
 const saveNow=(changedPid)=>{save();if(db){clearTimeout(fbSyncTimer);pushToFirebase(changedPid);}};
 
+// ลบ undefined/null ออกจาก object ก่อน push Firebase
+function cleanForFirebase(obj){
+  if(obj===null||obj===undefined)return null;
+  if(typeof obj!=='object'||Array.isArray(obj))return obj;
+  var result={};
+  Object.keys(obj).forEach(function(k){
+    var v=cleanForFirebase(obj[k]);
+    if(v!==undefined&&v!==null)result[k]=v;
+  });
+  return result;
+}
+
 // pushLog: push log ของ pid ที่เปลี่ยน — 1 document ต่อ 1 คนไข้ (format: logs_pid)
 function pushLog(pid){
   if(!db||!pid)return;
   var pidLog=S.logs&&S.logs[pid];
   if(!pidLog||Object.keys(pidLog).length===0)return;
+  var cleanLog=cleanForFirebase(pidLog);
+  if(!cleanLog||Object.keys(cleanLog).length===0)return;
   showSyncStatus('⏳ กำลังซิงค์...');
-  db.collection('nhLogs').doc('logs_'+pid).set(pidLog,{merge:true})
+  db.collection('nhLogs').doc('logs_'+pid).set(cleanLog,{merge:true})
     .then(function(){showSyncStatus('✅ ซิงค์ '+new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}));})
     .catch(function(err){showSyncStatus('⚠️ ซิงค์ไม่ได้: '+(err.code||err.message));});
 }
