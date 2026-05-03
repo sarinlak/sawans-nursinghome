@@ -958,22 +958,30 @@ function initFirebase(cfg){
       if(wasFirst){
         // โหลด nhLogs เฉพาะวันปัจจุบัน — ประหยัด quota
         var todayStr=(function(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();
-        // query เฉพาะวันนี้ด้วย _date field — ประหยัด reads มาก
-        db.collection('nhLogs').where('_date','==',todayStr).get().then(function(qs){
-          if(!S.logs)S.logs={};
-          qs.forEach(function(doc){
-            var d=doc.data();
-            var pid=d._pid||(doc.id.split('_')[0]);
-            var date=d._date||todayStr;
-            if(!S.logs[pid])S.logs[pid]={};
-            // เก็บแค่ fields ที่เป็นข้อมูลจริง ไม่รวม _date, _pid
-            var dayData=Object.assign({},d);
-            delete dayData._date;delete dayData._pid;
-            S.logs[pid][date]=dayData;
-          });
-          try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
-          renderAll();
-          showSyncStatus('☁️ ซิงค์แล้ว — realtime');
+        // โหลดวันนี้ทีละ pid (format pid_date) — รองรับทั้ง docs เก่าและใหม่
+        if(!S.logs)S.logs={};
+        var initPids=(S.patients||[]).map(function(p){return String(p.id);});
+        var initLoaded=0;
+        // โหลดทีละ pid
+        initPids.forEach(function(pid){
+          db.collection('nhLogs').doc(pid+'_'+todayStr).get().then(function(doc){
+            if(doc.exists){
+              if(!S.logs[pid])S.logs[pid]={};
+              var d=doc.data();
+              var dayData=Object.assign({},d);
+              delete dayData._date;delete dayData._pid;
+              S.logs[pid][todayStr]=dayData;
+            }
+            checkInitDone();
+          }).catch(function(){checkInitDone();});
+        });
+        if(initPids.length===0)checkInitDone();
+        function checkInitDone(){
+          initLoaded++;
+          if(initLoaded>=initPids.length){
+            try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
+            renderAll();
+            showSyncStatus('☁️ ซิงค์แล้ว — realtime');
           // listen nhLogs realtime (เฉพาะการเปลี่ยนแปลง)
           db.collection('nhLogs').onSnapshot({includeMetadataChanges:false},function(qs){
             if(!S.logs)S.logs={};
@@ -1250,42 +1258,28 @@ function sw(name,btn){
 // โหลด logs ของวันที่ระบุจาก Firebase (ถ้ายังไม่มีใน local)
 function loadLogsForDate(dateStr){
   if(!db)return;
-  // เช็คว่ามีข้อมูลวันนั้นใน local แล้วไหม
-  var hasData=false;
-  if(S.logs){
-    Object.keys(S.logs).forEach(function(pid){
-      if(S.logs[pid]&&S.logs[pid][dateStr])hasData=true;
-    });
-  }
-  if(hasData)return; // มีแล้วไม่ต้องโหลดซ้ำ
-  // query เฉพาะวันที่เลือก ด้วย _date field (ประหยัด reads)
-  // รองรับทั้ง docs ใหม่ (มี _date) และ docs เก่า (format pid_date)
-  db.collection('nhLogs').where('_date','==',dateStr).get().then(function(qs){
-    if(!S.logs)S.logs={};
-    qs.forEach(function(doc){
-      var d=doc.data();
-      var pid=d._pid||(doc.id.split('_')[0]);
-      if(!S.logs[pid])S.logs[pid]={};
-      var dayData=Object.assign({},d);
-      delete dayData._date;delete dayData._pid;
-      S.logs[pid][dateStr]=dayData;
-    });
-    // ถ้ายังไม่มีข้อมูลบางคน โหลดแบบ fallback จาก format เก่า pid_date
-    var pidsWithData=new Set(Object.keys(S.logs).filter(function(pid){return S.logs[pid]&&S.logs[pid][dateStr];}));
-    var allPids=(S.patients||[]).map(function(p){return String(p.id);});
-    var missingPids=allPids.filter(function(pid){return !pidsWithData.has(pid);});
-    if(missingPids.length>0){
-      // โหลด docs เก่าที่ไม่มี _date (format pid_date)
-      missingPids.forEach(function(pid){
-        db.collection('nhLogs').doc(pid+'_'+dateStr).get().then(function(doc){
-          if(!doc.exists)return;
-          if(!S.logs[pid])S.logs[pid]={};
-          S.logs[pid][dateStr]=doc.data();
-          try{const{photos,...d2}=S;localStorage.setItem(DK,JSON.stringify(d2));}catch(e){}
-          renderAll();
-        }).catch(function(){});
-      });
-    }
+  if(!S.logs)S.logs={};
+  // โหลดทีละ pid (format pid_date) — 1 read ต่อ 1 คนไข้
+  // วิธีนี้รองรับทั้ง docs เก่าและใหม่ และไม่ต้องสร้าง index
+  var allPids=(S.patients||[]).map(function(p){return String(p.id);});
+  var loaded=0;
+  allPids.forEach(function(pid){
+    db.collection('nhLogs').doc(pid+'_'+dateStr).get().then(function(doc){
+      if(doc.exists){
+        if(!S.logs[pid])S.logs[pid]={};
+        var d=doc.data();
+        var dayData=Object.assign({},d);
+        delete dayData._date;delete dayData._pid;
+        S.logs[pid][dateStr]=dayData;
+      }
+      loaded++;
+      if(loaded===allPids.length){
+        try{const{photos,...d2}=S;localStorage.setItem(DK,JSON.stringify(d2));}catch(e){}
+        renderAll();
+        showSyncStatus('☁️ ซิงค์แล้ว — realtime');
+      }
+    }).catch(function(){loaded++;});
+  });
     try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
     renderAll();
   }).catch(function(){});
