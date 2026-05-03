@@ -858,15 +858,18 @@ function cleanForFirebase(obj){
   return result;
 }
 
-// pushLog: push log ของ pid ที่เปลี่ยน — 1 document ต่อ 1 คนไข้ (format: logs_pid)
+// pushLog: push log ของ pid เฉพาะวันที่เปลี่ยน — format: pid_date (1 doc ต่อ 1 คน 1 วัน)
 function pushLog(pid){
   if(!db||!pid)return;
-  var pidLog=S.logs&&S.logs[pid];
-  if(!pidLog||Object.keys(pidLog).length===0)return;
-  var cleanLog=cleanForFirebase(pidLog);
-  if(!cleanLog||Object.keys(cleanLog).length===0)return;
+  var todayPush=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'});
+  var dayLog=S.logs&&S.logs[pid]&&S.logs[pid][todayPush];
+  if(!dayLog)return;
+  var cleanDay=cleanForFirebase(dayLog);
+  if(!cleanDay||Object.keys(cleanDay).length===0)return;
+  // เพิ่ม _date เพื่อให้ query ได้ + ใช้ format pid_date ตรงกับ Firebase จริง
+  var docData=Object.assign({},cleanDay,{_date:todayPush,_pid:pid});
   showSyncStatus('⏳ กำลังซิงค์...');
-  db.collection('nhLogs').doc('logs_'+pid).set(cleanLog,{merge:true})
+  db.collection('nhLogs').doc(pid+'_'+todayPush).set(docData,{merge:true})
     .then(function(){showSyncStatus('✅ ซิงค์ '+new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}));})
     .catch(function(err){showSyncStatus('⚠️ ซิงค์ไม่ได้: '+(err.code||err.message));});
 }
@@ -956,18 +959,18 @@ function initFirebase(cfg){
       if(wasFirst){
         // โหลด nhLogs เฉพาะวันปัจจุบัน — ประหยัด quota
         var todayStr=(function(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();
-        // query เฉพาะวันนี้โดยใช้ format date_pid
-        db.collection('nhLogs').get().then(function(qs){
+        // query เฉพาะวันนี้ด้วย _date field — ประหยัด reads มาก
+        db.collection('nhLogs').where('_date','==',todayStr).get().then(function(qs){
           if(!S.logs)S.logs={};
           qs.forEach(function(doc){
-            // format: logs_pid — 1 document ต่อ 1 คนไข้ มีทุกวันอยู่ข้างใน
-            var pid=doc.id.replace(/^logs_/,'');
-            var pidData=doc.data();
-            // โหลดแค่วันนี้เพื่อประหยัด memory (วันอื่นโหลดเมื่อกดดู)
-            if(pidData[todayStr]){
-              if(!S.logs[pid])S.logs[pid]={};
-              S.logs[pid][todayStr]=pidData[todayStr];
-            }
+            var d=doc.data();
+            var pid=d._pid||(doc.id.split('_')[0]);
+            var date=d._date||todayStr;
+            if(!S.logs[pid])S.logs[pid]={};
+            // เก็บแค่ fields ที่เป็นข้อมูลจริง ไม่รวม _date, _pid
+            var dayData=Object.assign({},d);
+            delete dayData._date;delete dayData._pid;
+            S.logs[pid][date]=dayData;
           });
           try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
           renderAll();
@@ -977,14 +980,23 @@ function initFirebase(cfg){
             if(!S.logs)S.logs={};
             qs.docChanges().forEach(function(change){
               if(change.type==='removed')return;
-              // format: logs_pid — merge ข้อมูลทุกวันเข้า S.logs[pid]
-              var pid=change.doc.id.replace(/^logs_/,'');
-              var pidData=change.doc.data();
+              var d=change.doc.data();
+              var pid,date;
+              if(d._pid&&d._date){
+                // format ใหม่: มี _pid และ _date
+                pid=String(d._pid);
+                date=d._date;
+              } else {
+                // format เก่า: pid_date
+                var parts=change.doc.id.split('_');
+                pid=parts[0];
+                date=parts.slice(1).join('_');
+              }
+              if(!pid||!date)return;
               if(!S.logs[pid])S.logs[pid]={};
-              // merge ทุกวันจาก document เข้า local
-              Object.keys(pidData).forEach(function(date){
-                S.logs[pid][date]=pidData[date];
-              });
+              var dayData=Object.assign({},d);
+              delete dayData._date;delete dayData._pid;
+              S.logs[pid][date]=dayData;
             });
             try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
             renderAll();
@@ -1247,18 +1259,34 @@ function loadLogsForDate(dateStr){
     });
   }
   if(hasData)return; // มีแล้วไม่ต้องโหลดซ้ำ
-  // โหลดจาก Firebase เฉพาะวันที่เลือก — format logs_pid
-  db.collection('nhLogs').get().then(function(qs){
+  // query เฉพาะวันที่เลือก ด้วย _date field (ประหยัด reads)
+  // รองรับทั้ง docs ใหม่ (มี _date) และ docs เก่า (format pid_date)
+  db.collection('nhLogs').where('_date','==',dateStr).get().then(function(qs){
     if(!S.logs)S.logs={};
     qs.forEach(function(doc){
-      // format: logs_pid — ดึงเฉพาะวันที่ต้องการจาก document
-      var pid=doc.id.replace(/^logs_/,'');
-      var pidData=doc.data();
-      if(pidData[dateStr]){
-        if(!S.logs[pid])S.logs[pid]={};
-        S.logs[pid][dateStr]=pidData[dateStr];
-      }
+      var d=doc.data();
+      var pid=d._pid||(doc.id.split('_')[0]);
+      if(!S.logs[pid])S.logs[pid]={};
+      var dayData=Object.assign({},d);
+      delete dayData._date;delete dayData._pid;
+      S.logs[pid][dateStr]=dayData;
     });
+    // ถ้ายังไม่มีข้อมูลบางคน โหลดแบบ fallback จาก format เก่า pid_date
+    var pidsWithData=new Set(Object.keys(S.logs).filter(function(pid){return S.logs[pid]&&S.logs[pid][dateStr];}));
+    var allPids=(S.patients||[]).map(function(p){return String(p.id);});
+    var missingPids=allPids.filter(function(pid){return !pidsWithData.has(pid);});
+    if(missingPids.length>0){
+      // โหลด docs เก่าที่ไม่มี _date (format pid_date)
+      missingPids.forEach(function(pid){
+        db.collection('nhLogs').doc(pid+'_'+dateStr).get().then(function(doc){
+          if(!doc.exists)return;
+          if(!S.logs[pid])S.logs[pid]={};
+          S.logs[pid][dateStr]=doc.data();
+          try{const{photos,...d2}=S;localStorage.setItem(DK,JSON.stringify(d2));}catch(e){}
+          renderAll();
+        }).catch(function(){});
+      });
+    }
     try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
     renderAll();
   }).catch(function(){});
