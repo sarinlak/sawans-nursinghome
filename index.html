@@ -1003,6 +1003,8 @@ function initFirebase(cfg){
         var remoteLogPid=remote._lastLogPid;
         var remoteLogDate=remote._lastLogDate;
         if(remoteLogPid&&remoteLogDate){
+          // โหลด log ของ pid+date ที่เปลี่ยน แล้ว update S.logs ทันที
+          // ไม่สนว่ากำลังดูวันไหนอยู่ — ข้อมูลจะถูกต้องเมื่อกดดูวันนั้น
           db.collection('nhLogs').doc(remoteLogPid+'_'+remoteLogDate).get().then(function(doc){
             if(doc.exists){
               if(!S.logs[remoteLogPid])S.logs[remoteLogPid]={};
@@ -1010,6 +1012,8 @@ function initFirebase(cfg){
               var dayData=Object.assign({},d2);
               delete dayData._date;delete dayData._pid;
               S.logs[remoteLogPid][remoteLogDate]=dayData;
+              // mark ว่าวันนี้ loaded แล้ว (ป้องกันโหลดซ้ำ)
+              if(_loadedDates)_loadedDates[remoteLogDate]=true;
             }
             try{const{photos,...d3}=S;localStorage.setItem(DK,JSON.stringify(d3));}catch(e){}
             renderAll();
