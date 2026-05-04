@@ -2917,7 +2917,30 @@ function buildRepText(){
   return rep;
 
 }
-function genRep(){document.getElementById('rpv').textContent=buildRepText();toast('สร้างรายงานเรียบร้อย ✅');}
+function genRep(){
+  // โหลดข้อมูลวันที่ต้องการก่อนสร้างรายงาน
+  var today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'});
+  var yesterday=new Date(new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'})+'T00:00:00');
+  yesterday.setDate(yesterday.getDate()-1);
+  var yd=yesterday.toLocaleDateString('en-CA');
+  // โหลดทั้งวันนี้และเมื่อวาน (เวร N ใช้ข้อมูลเมื่อวาน)
+  var toLoad=[today,yd];
+  var loaded=0;
+  var total=toLoad.length;
+  function onDone(){
+    loaded++;
+    if(loaded>=total){
+      document.getElementById('rpv').textContent=buildRepText();
+      toast('สร้างรายงานเรียบร้อย ✅');
+    }
+  }
+  toLoad.forEach(function(d){
+    if(_loadedDates&&_loadedDates[d]){onDone();return;} // มีแล้ว ไม่ต้องโหลดซ้ำ
+    loadLogsForDate(d);
+    // รอให้โหลดเสร็จก่อน
+    setTimeout(onDone, 1500);
+  });
+}
 
 async function exportAll(){
   const text=buildRepText();document.getElementById('rpv').textContent=text;
