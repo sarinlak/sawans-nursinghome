@@ -1130,7 +1130,7 @@ function gSup(pid,date,k){return((S.supplyLogs||{})[pid]||{})[date]&&((S.supplyL
 function setSup(pid,date,k,v){if(!S.supplyLogs)S.supplyLogs={};if(!S.supplyLogs[pid])S.supplyLogs[pid]={};if(!S.supplyLogs[pid][date])S.supplyLogs[pid][date]={};S.supplyLogs[pid][date][k]=Math.max(0,v);save();}
 function adjSup(pid,k,d){setSup(pid,curDate,k,gSup(pid,curDate,k)+d);rSupplyPat();}
 function sSupOtherName(pid,name){if(!S.supplyLogs)S.supplyLogs={};if(!S.supplyLogs[pid])S.supplyLogs[pid]={};if(!S.supplyLogs[pid][curDate])S.supplyLogs[pid][curDate]={};S.supplyLogs[pid][curDate].other1Name=name;save();}
-function adjPamp(pid,sh,d){const lg=eLog(pid,curDate,sh);lg.pampers=Math.max(0,(lg.pampers||0)+d);save();uPct(pid);rPampSummary();}
+function adjPamp(pid,sh,d){const lg=eLog(pid,curDate,sh);lg.pampers=Math.max(0,(lg.pampers||0)+d);saveNow(pid);uPct(pid);rPampSummary();}
 
 function getMedsForShift(p,sh){
   const sm=sh==='D'?MEDS_D:MEDS_N;
@@ -1747,23 +1747,23 @@ function tCard(id){
 function sSh(pid,sh,e){if(e)e.stopPropagation();aSh[pid]=sh;rPats();}
 function sShEl(el,e){if(e)e.stopPropagation();sSh(el.dataset.pid,el.dataset.sh,null);}
 function tTask(pid,sh,t){const lg=eLog(pid,curDate,sh);if(!lg.tasks)lg.tasks={};lg.tasks[t]=!lg.tasks[t];saveNow(pid);uPct(pid);}
-function sBath(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.bath=lg.bath===v?null:v;save();
+function sBath(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.bath=lg.bath===v?null:v;saveNow(pid);
   const cb=document.getElementById('cb-'+pid);
   if(cb&&!cb.classList.contains('h')){const p=S.patients.find(x=>x.id===pid);if(p)cb.innerHTML=rShift(p,sh,eLog(pid,curDate,sh));}
 }
-function tPT(pid,sh,item){const lg=eLog(pid,curDate,sh);if(!lg.pt)lg.pt={};lg.pt[item]=!lg.pt[item];save();
+function tPT(pid,sh,item){const lg=eLog(pid,curDate,sh);if(!lg.pt)lg.pt={};lg.pt[item]=!lg.pt[item];saveNow(pid);
   const cb=document.getElementById('cb-'+pid);
   if(cb&&!cb.classList.contains('h')){const p=S.patients.find(x=>x.id===pid);if(p)cb.innerHTML=rShift(p,sh,eLog(pid,curDate,sh));}
 }
-function tActivity(pid,sh,item){const lg=eLog(pid,curDate,sh);if(!lg.activities)lg.activities={};lg.activities[item]=!lg.activities[item];save();
+function tActivity(pid,sh,item){const lg=eLog(pid,curDate,sh);if(!lg.activities)lg.activities={};lg.activities[item]=!lg.activities[item];saveNow(pid);
   const cb=document.getElementById('cb-'+pid);
   if(cb&&!cb.classList.contains('h')){const p=S.patients.find(x=>x.id===pid);if(p)cb.innerHTML=rShift(p,sh,eLog(pid,curDate,sh));}
 }
-function tWound(pid,sh,w){const lg=eLog(pid,curDate,sh);if(!lg.wounds)lg.wounds=[];const i=lg.wounds.indexOf(w);if(i>=0)lg.wounds.splice(i,1);else lg.wounds.push(w);save();
+function tWound(pid,sh,w){const lg=eLog(pid,curDate,sh);if(!lg.wounds)lg.wounds=[];const i=lg.wounds.indexOf(w);if(i>=0)lg.wounds.splice(i,1);else lg.wounds.push(w);saveNow(pid);
   const cb=document.getElementById('cb-'+pid);
   if(cb&&!cb.classList.contains('h')){const p=S.patients.find(x=>x.id===pid);if(p)cb.innerHTML=rShift(p,sh,eLog(pid,curDate,sh));}
 }
-function sFoodMode(pid,sh,mode){const lg=eLog(pid,curDate,sh);lg.foodMode=mode;save();
+function sFoodMode(pid,sh,mode){const lg=eLog(pid,curDate,sh);lg.foodMode=mode;saveNow(pid);
   const cb=document.getElementById('cb-'+pid);
   if(cb&&!cb.classList.contains('h')){const p=S.patients.find(x=>x.id===pid);if(p)cb.innerHTML=rShift(p,sh,eLog(pid,curDate,sh));}
 }
@@ -1795,16 +1795,16 @@ function tMedMeal(pid,sh,medNames,allDone){
   const cb=document.getElementById('cb-'+pid);
   if(cb&&!cb.classList.contains('h')){const p=S.patients.find(x=>x.id===pid);if(p)cb.innerHTML=rShift(p,sh,eLog(pid,curDate,sh));}
 }
-function sVit(pid,sh,f,v){const lg=eLog(pid,curDate,sh);if(!lg.v)lg.v={};lg.v[f]=v;save();if(f==='status')rPats();}
+function sVit(pid,sh,f,v){const lg=eLog(pid,curDate,sh);if(!lg.v)lg.v={};lg.v[f]=v;saveNow(pid);if(f==='status')rPats();}
 
-function sPTRounds(pid,sh,val){const lg=eLog(pid,curDate,sh);if(!lg.pt)lg.pt={};lg.pt['เดินราวจับ']=val?parseInt(val):null;save();}
-function sFoodT(pid,sh,mk,ft){const lg=eLog(pid,curDate,sh);if(!lg.food)lg.food={};if(!lg.food[mk])lg.food[mk]={};lg.food[mk].type=lg.food[mk].type===ft?null:ft;save();rPats();}
-function sFoodD(pid,sh,mk,f,v){const lg=eLog(pid,curDate,sh);if(!lg.food)lg.food={};if(!lg.food[mk])lg.food[mk]={};lg.food[mk][f]=v;save();}
-function sStoolDid(pid,sh,v){const lg=eLog(pid,curDate,sh);if(typeof lg.stool!=='object')lg.stool={};lg.stool.did=lg.stool.did===v?null:v;if(lg.stool.did!==true){lg.stool.count='';lg.stool.texture=null;lg.stool.color=null;}save();uPct(pid);rWarn();}
-function sStoolF(pid,sh,f,v){const lg=eLog(pid,curDate,sh);if(typeof lg.stool!=='object')lg.stool={did:true};lg.stool[f]=lg.stool[f]===v?null:v;save();rPats();}
-function sUrine(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.urine=lg.urine===v?null:v;save();rPats();}
-function sNote(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.note=v;save();}
-function sCaution(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.caution=v;save();}
+function sPTRounds(pid,sh,val){const lg=eLog(pid,curDate,sh);if(!lg.pt)lg.pt={};lg.pt['เดินราวจับ']=val?parseInt(val):null;saveNow(pid);}
+function sFoodT(pid,sh,mk,ft){const lg=eLog(pid,curDate,sh);if(!lg.food)lg.food={};if(!lg.food[mk])lg.food[mk]={};lg.food[mk].type=lg.food[mk].type===ft?null:ft;saveNow(pid);rPats();}
+function sFoodD(pid,sh,mk,f,v){const lg=eLog(pid,curDate,sh);if(!lg.food)lg.food={};if(!lg.food[mk])lg.food[mk]={};lg.food[mk][f]=v;saveNow(pid);}
+function sStoolDid(pid,sh,v){const lg=eLog(pid,curDate,sh);if(typeof lg.stool!=='object')lg.stool={};lg.stool.did=lg.stool.did===v?null:v;if(lg.stool.did!==true){lg.stool.count='';lg.stool.texture=null;lg.stool.color=null;}saveNow(pid);uPct(pid);rWarn();}
+function sStoolF(pid,sh,f,v){const lg=eLog(pid,curDate,sh);if(typeof lg.stool!=='object')lg.stool={did:true};lg.stool[f]=lg.stool[f]===v?null:v;saveNow(pid);rPats();}
+function sUrine(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.urine=lg.urine===v?null:v;saveNow(pid);rPats();}
+function sNote(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.note=v;saveNow(pid);}
+function sCaution(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.caution=v;saveNow(pid);}
 // debounce timers for VS inputs
 const vsTimers={};
 function sVSDebounce(pid,sh,field,val){
@@ -1830,8 +1830,8 @@ function sVSDebounce(pid,sh,field,val){
   vsTimers[key]=setTimeout(function(){S._savedAt=Date.now();save();},800);
 }
 function sVSMain(pid,sh,field,val){sVSDebounce(pid,sh,field,val);}
-function sVSStatus(pid,sh,val){const lg=eLog(pid,curDate,sh);if(!lg.v)lg.v={};lg.v.status=lg.v.status===val?null:val;save();rPats();}
-function sWoundNote(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.woundNote=v;save();}
+function sVSStatus(pid,sh,val){const lg=eLog(pid,curDate,sh);if(!lg.v)lg.v={};lg.v.status=lg.v.status===val?null:val;saveNow(pid);rPats();}
+function sWoundNote(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.woundNote=v;saveNow(pid);}
 function toggleParrot(pid,sh){
   const lg=eLog(pid,curDate,sh);
   lg.parrot=!lg.parrot;
@@ -1847,7 +1847,7 @@ function toggleParrot(pid,sh){
     if(!slot.rr && lg.v.rr)slot.rr=lg.v.rr;
     if(!slot.o2 && lg.v.o2)slot.o2=lg.v.o2;
   }
-  save();
+  saveNow(pid);
   const p=S.patients.find(x=>x.id===pid);
   if(!p)return;
   const cb=document.getElementById('cb-'+pid);
@@ -3436,7 +3436,7 @@ function rHandover(){
 }
 
 function tLaxEl(el){tLaxative(el.dataset.pid,el.dataset.sh,el.dataset.date);}
-function tLaxative(pid,sh,date){const lg=eLog(pid,date,sh);lg.laxativeGiven=!lg.laxativeGiven;save();rHandover();}
+function tLaxative(pid,sh,date){const lg=eLog(pid,date,sh);lg.laxativeGiven=!lg.laxativeGiven;saveNow(pid);rHandover();}
 function sHvNoteEl(el){sHvNote(el.dataset.pid,el.dataset.sh,el.value);}
 function sHvNote(pid,sh,val){const hv=eHvLog(pid,sh);hv.shiftNote=val;save();}
 // stubs
