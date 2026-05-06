@@ -997,9 +997,12 @@ function initFirebase(cfg){
           initLoaded++;
           if(initLoaded>=initPids.length){
             _loadedDates[todayStr]=true;
-            try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
-            renderAll();
-            showSyncStatus('☁️ ซิงค์แล้ว — realtime');
+            // สร้าง stoolDates ให้ครบทุกคนจากข้อมูลย้อนหลัง 7 วัน (เกิดแค่ครั้งเดียวตอนเปิดเว็บ)
+            buildStoolDatesIfNeeded(function(){
+              try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
+              renderAll();
+              showSyncStatus('☁️ ซิงค์แล้ว — realtime');
+            });
             // ไม่ subscribe nhLogs ทั้ง collection (กิน reads เยอะมาก)
             // แทนที่ด้วยการ reload วันที่แสดงอยู่เมื่อ nhData/main มีการเปลี่ยนแปลง
             // ซึ่ง nhData/main listener ข้างบนจะ handle แล้ว
@@ -1282,6 +1285,56 @@ function sw(name,btn){
 // โหลด logs ของวันที่ระบุจาก Firebase (ถ้ายังไม่มีใน local)
 // เก็บว่าวันไหนโหลดแล้วบ้าง เพื่อไม่โหลดซ้ำ
 var _loadedDates={};
+var _stoolDatesBuilt=false;
+
+// สร้าง stoolDates จากข้อมูลย้อนหลัง 7 วัน — เรียกแค่ครั้งเดียวตอนเปิดเว็บ
+function buildStoolDatesIfNeeded(cb){
+  if(_stoolDatesBuilt){if(cb)cb();return;}
+  _stoolDatesBuilt=true;
+  if(!S.stoolDates)S.stoolDates={};
+  var allPids=(S.patients||[]).map(function(p){return String(p.id);});
+  // หา pid ที่ยังไม่มีใน stoolDates
+  var missingPids=allPids.filter(function(pid){return !S.stoolDates[pid];});
+  if(missingPids.length===0){if(cb)cb();return;}
+  // โหลดย้อนหลัง 7 วัน เฉพาะ pid ที่ยังไม่มีข้อมูล
+  var dates=[];
+  for(var i=0;i<7;i++){
+    var d=new Date();d.setDate(d.getDate()-i);
+    dates.push(d.toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'}));
+  }
+  var total=missingPids.length*dates.length;
+  var done=0;
+  var foundDates={};
+  missingPids.forEach(function(pid){
+    dates.forEach(function(dateStr){
+      db.collection('nhLogs').doc(pid+'_'+dateStr).get().then(function(doc){
+        if(doc.exists){
+          var d=doc.data();
+          if((d.D&&d.D.stool&&d.D.stool.did===true)||(d.N&&d.N.stool&&d.N.stool.did===true)){
+            if(!foundDates[pid]||dateStr>foundDates[pid])foundDates[pid]=dateStr;
+          }
+          // เก็บใน S.logs ด้วย
+          if(!S.logs[pid])S.logs[pid]={};
+          var dayData=Object.assign({},d);
+          delete dayData._date;delete dayData._pid;delete dayData._lastStoolDate;
+          S.logs[pid][dateStr]=dayData;
+          _loadedDates[dateStr]=true;
+        }
+        done++;
+        if(done>=total){
+          // update stoolDates และ push ขึ้น Firebase
+          Object.keys(foundDates).forEach(function(pid){
+            S.stoolDates[pid]=foundDates[pid];
+          });
+          if(db&&Object.keys(foundDates).length>0){
+            db.collection('nhData').doc('main').update({stoolDates:S.stoolDates}).catch(function(){});
+          }
+          if(cb)cb();
+        }
+      }).catch(function(){done++;if(done>=total&&cb)cb();});
+    });
+  });
+}
 function loadLogsForDate(dateStr){
   if(!db)return;
   if(!S.logs)S.logs={};
