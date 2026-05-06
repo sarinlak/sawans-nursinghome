@@ -1846,8 +1846,13 @@ function sStoolDid(pid,sh,v){
     S.stoolDates[pid]=lastFound||null;
   }
   save(); // save S.stoolDates ลง localStorage
-  if(db){clearTimeout(fbSyncTimer);pushToFirebase();} // push nhData/main (มี stoolDates อยู่แล้ว)
-  saveNow(pid); // push nhLogs ของ pid
+  // push nhLogs ของ pid
+  saveNow(pid);
+  // push nhData/main แยกเพื่อ sync stoolDates ไปทุกเครื่อง
+  if(db){
+    var{photos,logs,...dataNoPhotosNoLogs}=S;
+    db.collection('nhData').doc('main').set(dataNoPhotosNoLogs,{merge:true}).catch(function(){});
+  }
   uPct(pid);rWarn();
 }
 function sStoolF(pid,sh,f,v){const lg=eLog(pid,curDate,sh);if(typeof lg.stool!=='object')lg.stool={did:true};lg.stool[f]=lg.stool[f]===v?null:v;saveNow(pid);rPats();}
