@@ -866,7 +866,10 @@ function pushLog(pid,date){
   if(!dayLog)return;
   var cleanDay=cleanForFirebase(dayLog);
   if(!cleanDay||Object.keys(cleanDay).length===0)return;
+  // รวม _lastStoolDate เพื่อให้เครื่องอื่นรับและแสดงถูกต้อง
+  var lastStoolDate=(S.logs[pid]&&S.logs[pid]._lastStoolDate)||null;
   var docData=Object.assign({},cleanDay,{_date:targetDate,_pid:pid});
+  if(lastStoolDate)docData._lastStoolDate=lastStoolDate;
   showSyncStatus('⏳ กำลังซิงค์...');
   db.collection('nhLogs').doc(pid+'_'+targetDate).set(docData,{merge:true})
     .then(function(){
@@ -978,8 +981,12 @@ function initFirebase(cfg){
             if(doc.exists){
               if(!S.logs[pid])S.logs[pid]={};
               var d=doc.data();
+              if(d._lastStoolDate){
+                var existing=S.logs[pid]._lastStoolDate||'';
+                if(d._lastStoolDate>existing)S.logs[pid]._lastStoolDate=d._lastStoolDate;
+              }
               var dayData=Object.assign({},d);
-              delete dayData._date;delete dayData._pid;
+              delete dayData._date;delete dayData._pid;delete dayData._lastStoolDate;
               S.logs[pid][todayStr]=dayData;
             }
             checkInitDone();
@@ -1009,10 +1016,13 @@ function initFirebase(cfg){
             if(doc.exists){
               if(!S.logs[remoteLogPid])S.logs[remoteLogPid]={};
               var d2=doc.data();
+              if(d2._lastStoolDate){
+                var existing2=S.logs[remoteLogPid]._lastStoolDate||'';
+                if(d2._lastStoolDate>existing2)S.logs[remoteLogPid]._lastStoolDate=d2._lastStoolDate;
+              }
               var dayData=Object.assign({},d2);
-              delete dayData._date;delete dayData._pid;
+              delete dayData._date;delete dayData._pid;delete dayData._lastStoolDate;
               S.logs[remoteLogPid][remoteLogDate]=dayData;
-              // mark ว่าวันนี้ loaded แล้ว (ป้องกันโหลดซ้ำ)
               if(_loadedDates)_loadedDates[remoteLogDate]=true;
             }
             try{const{photos,...d3}=S;localStorage.setItem(DK,JSON.stringify(d3));}catch(e){}
@@ -1160,7 +1170,15 @@ function getDowLabel(dow){
 function medKey(name,meal){return`${name}||${meal}`;}
 
 function countNoStool(pid){
-  const allD=Object.keys((S.logs[pid]||{})).sort().reverse();
+  var pidLog=S.logs[pid]||{};
+  // ใช้ _lastStoolDate ถ้ามี (แม่นยำ ไม่กิน reads เพิ่ม)
+  var lastStool=pidLog._lastStoolDate||null;
+  if(lastStool){
+    var diff=daysDiff(lastStool,curDate);
+    return diff<0?0:diff;
+  }
+  // fallback: นับจากข้อมูลที่มีใน S.logs (เฉพาะวันที่โหลดมาแล้ว)
+  const allD=Object.keys(pidLog).filter(function(d){return !d.startsWith('_');}).sort().reverse();
   let c=0;for(const d of allD){if(d>curDate)continue;if((gLog(pid,d,'D').stool&&gLog(pid,d,'D').stool.did===true)||(gLog(pid,d,'N').stool&&gLog(pid,d,'N').stool.did===true))break;c++;if(c>30)break;}return c;
 }
 function adlLevel(s){
@@ -1279,8 +1297,13 @@ function loadLogsForDate(dateStr){
       if(doc.exists){
         if(!S.logs[pid])S.logs[pid]={};
         var d=doc.data();
+        // อ่าน _lastStoolDate จาก doc แล้วเก็บใน S.logs[pid]
+        if(d._lastStoolDate){
+          var existing=S.logs[pid]._lastStoolDate||'';
+          if(d._lastStoolDate>existing)S.logs[pid]._lastStoolDate=d._lastStoolDate;
+        }
         var dayData=Object.assign({},d);
-        delete dayData._date;delete dayData._pid;
+        delete dayData._date;delete dayData._pid;delete dayData._lastStoolDate;
         S.logs[pid][dateStr]=dayData;
       }
       loaded++;
@@ -1800,7 +1823,31 @@ function sVit(pid,sh,f,v){const lg=eLog(pid,curDate,sh);if(!lg.v)lg.v={};lg.v[f]
 function sPTRounds(pid,sh,val){const lg=eLog(pid,curDate,sh);if(!lg.pt)lg.pt={};lg.pt['เดินราวจับ']=val?parseInt(val):null;saveNow(pid);}
 function sFoodT(pid,sh,mk,ft){const lg=eLog(pid,curDate,sh);if(!lg.food)lg.food={};if(!lg.food[mk])lg.food[mk]={};lg.food[mk].type=lg.food[mk].type===ft?null:ft;saveNow(pid);rPats();}
 function sFoodD(pid,sh,mk,f,v){const lg=eLog(pid,curDate,sh);if(!lg.food)lg.food={};if(!lg.food[mk])lg.food[mk]={};lg.food[mk][f]=v;saveNow(pid);}
-function sStoolDid(pid,sh,v){const lg=eLog(pid,curDate,sh);if(typeof lg.stool!=='object')lg.stool={};lg.stool.did=lg.stool.did===v?null:v;if(lg.stool.did!==true){lg.stool.count='';lg.stool.texture=null;lg.stool.color=null;}saveNow(pid);uPct(pid);rWarn();}
+function sStoolDid(pid,sh,v){
+  const lg=eLog(pid,curDate,sh);
+  if(typeof lg.stool!=='object')lg.stool={};
+  lg.stool.did=lg.stool.did===v?null:v;
+  if(lg.stool.did!==true){lg.stool.count='';lg.stool.texture=null;lg.stool.color=null;}
+  // อัปเดต _lastStoolDate ใน S.logs[pid] เพื่อให้ countNoStool ทำงานถูกต้องทุกเครื่อง
+  if(!S.logs[pid])S.logs[pid]={};
+  if(lg.stool.did===true){
+    // ถ่ายแล้ว — บันทึกวันที่ถ่ายล่าสุด
+    var prev=S.logs[pid]._lastStoolDate||'';
+    if(curDate>=prev)S.logs[pid]._lastStoolDate=curDate;
+  } else {
+    // untick — คำนวณ _lastStoolDate ใหม่จากข้อมูลที่มี
+    var lastFound='';
+    Object.keys(S.logs[pid]).forEach(function(d){
+      if(d.startsWith('_'))return;
+      var dl=S.logs[pid][d];
+      if((dl.D&&dl.D.stool&&dl.D.stool.did===true)||(dl.N&&dl.N.stool&&dl.N.stool.did===true)){
+        if(d>lastFound)lastFound=d;
+      }
+    });
+    S.logs[pid]._lastStoolDate=lastFound||null;
+  }
+  saveNow(pid);uPct(pid);rWarn();
+}
 function sStoolF(pid,sh,f,v){const lg=eLog(pid,curDate,sh);if(typeof lg.stool!=='object')lg.stool={did:true};lg.stool[f]=lg.stool[f]===v?null:v;saveNow(pid);rPats();}
 function sUrine(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.urine=lg.urine===v?null:v;saveNow(pid);rPats();}
 function sNote(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.note=v;saveNow(pid);}
