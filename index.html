@@ -998,11 +998,12 @@ function initFirebase(cfg){
           if(initLoaded>=initPids.length){
             _loadedDates[todayStr]=true;
             // สร้าง stoolDates ให้ครบทุกคนจากข้อมูลย้อนหลัง 7 วัน (เกิดแค่ครั้งเดียวตอนเปิดเว็บ)
-            buildStoolDatesIfNeeded(function(){
-              try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
-              renderAll();
-              showSyncStatus('☁️ ซิงค์แล้ว — realtime');
-            });
+            // render ทันที ไม่รอ stoolDates
+            try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
+            renderAll();
+            showSyncStatus('☁️ ซิงค์แล้ว — realtime');
+            // สร้าง stoolDates background (ไม่บล็อก sync)
+            buildStoolDatesIfNeeded(function(){renderAll();});
             // ไม่ subscribe nhLogs ทั้ง collection (กิน reads เยอะมาก)
             // แทนที่ด้วยการ reload วันที่แสดงอยู่เมื่อ nhData/main มีการเปลี่ยนแปลง
             // ซึ่ง nhData/main listener ข้างบนจะ handle แล้ว
