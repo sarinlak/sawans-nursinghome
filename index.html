@@ -1340,8 +1340,10 @@ function loadLogsForDate(dateStr){
   if(!db)return;
   if(!S.logs)S.logs={};
   var today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'});
-  // ถ้าโหลดแล้วและไม่ใช่วันนี้ → ไม่โหลดซ้ำ (วันเก่าไม่เปลี่ยน)
-  if(_loadedDates[dateStr]&&dateStr!==today)return;
+  var yesterday=new Date();yesterday.setDate(yesterday.getDate()-1);
+  var yd=yesterday.toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'});
+  // ไม่ cache วันนี้และเมื่อวาน (เวร N อาจยังทำงานอยู่)
+  if(_loadedDates[dateStr]&&dateStr!==today&&dateStr!==yd)return;
   _loadedDates[dateStr]=true;
   var allPids=(S.patients||[]).map(function(p){return String(p.id);});
   var loaded=0;
