@@ -2809,6 +2809,8 @@ function bSum(p,dayData){
     txt+=sh==='D'?'☀️ เวร D\n':'🌙 เวร N\n';
     if(v.bp||v.temp||v.hr)txt+=`สัญญาณชีพ: T=${v.temp||'-'} HR=${v.hr||'-'} BP=${v.bp||'-'} O2=${v.o2||'-'}%\n`;
     if(v.status)txt+=`สถานะ: ${v.status}\n`;
+    if(v.conscious)txt+=`การรู้สึกตัว: ${v.conscious}\n`;
+    if(v.mood)txt+=`อารมณ์: ${v.mood}\n`;
     if(lg.parrot){txt+=`ฟอร์มปรอท:\n`;VS_TIMES.forEach(t=>{const vsd=(lg.vsData&&lg.vsData[t])||{};if(vsd.bp||vsd.temp||vsd.hr)txt+=`  ${t}: T=${vsd.temp||'-'} HR=${vsd.hr||'-'} BP=${vsd.bp||'-'} O2=${vsd.o2||'-'}%\n`;});}
     const RENAME={'ให้อาหารเช้า':'อาหารเช้า','ให้อาหารเที่ยง':'อาหารกลางวัน','ให้อาหารเย็น':'อาหารเย็น'};
     (sh==='D'?p.tasksD||[]:p.tasksN||[]).forEach(t=>txt+=`${(lg.tasks&&lg.tasks[t])?'✅':'⬜'} ${RENAME[t]||t}\n`);
@@ -2953,6 +2955,8 @@ function buildRepText(){
       rep+=`${sh==='D'?'☀️ เวร D (8-16น.)':'🌙 เวร N (16-8น.)'}${shDateLabel}\n`;
       if(v.bp||v.temp||v.hr)rep+=`สัญญาณชีพ: T=${v.temp||'-'} HR=${v.hr||'-'}bpm RR=${v.rr||'-'}/min BP=${v.bp||'-'}mmhg O2sat=${v.o2||'-'}%\n`;
       if(v.status)rep+=`${v.status!=='ปกติ'?'⚠️ ':''}สถานะ: ${v.status}\n`;
+      if(v.conscious)rep+=`การรู้สึกตัว: ${v.conscious}\n`;
+      if(v.mood)rep+=`อารมณ์: ${v.mood}\n`;
       // Tasks — only show DONE items, exclude housekeeping
       const HIDE_FROM_REP=['เติมน้ำในเหยือก','เช็ดหัวเตียง'];
       const RENAME_TASK={'ให้อาหารเช้า':'อาหารเช้า','ให้อาหารเที่ยง':'อาหารกลางวัน','ให้อาหารเย็น':'อาหารเย็น'};
