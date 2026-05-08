@@ -709,6 +709,7 @@ let cachedPIN=''; // ต้องอยู่ด้านบนก่อน getS
 const DEFAULT_TASKS_D=[
   'วัดสัญญาณชีพรอบ 10.00น.',
   'อาหารเช้า',
+  'อาหารเบรค',
   'บริหารลิ้นหลังอาหารเช้า',
   'อาหารกลางวัน',
   'ออกกำลังกายท่านั่ง 40 นาที',
@@ -1842,6 +1843,7 @@ function tWound(pid,sh,w){const lg=eLog(pid,curDate,sh);if(!lg.wounds)lg.wounds=
   const cb=document.getElementById('cb-'+pid);
   if(cb&&!cb.classList.contains('h')){const p=S.patients.find(x=>x.id===pid);if(p)cb.innerHTML=rShift(p,sh,eLog(pid,curDate,sh));}
 }
+function sFoodSubType(pid,sh,t){const lg=eLog(pid,curDate,sh);lg.foodSubType=lg.foodSubType===t?null:t;saveNow(pid);const cb=document.getElementById('cb-'+pid);const pp=S.patients.find(x=>String(x.id)===String(pid));if(cb&&pp)cb.innerHTML=rShift(pp,sh,lg);}
 function sFoodMode(pid,sh,mode){const lg=eLog(pid,curDate,sh);lg.foodMode=mode;saveNow(pid);
   const cb=document.getElementById('cb-'+pid);
   if(cb&&!cb.classList.contains('h')){const p=S.patients.find(x=>x.id===pid);if(p)cb.innerHTML=rShift(p,sh,eLog(pid,curDate,sh));}
@@ -1941,6 +1943,8 @@ function sVSDebounce(pid,sh,field,val){
 }
 function sVSMain(pid,sh,field,val){sVSDebounce(pid,sh,field,val);}
 function sVSStatus(pid,sh,val){const lg=eLog(pid,curDate,sh);if(!lg.v)lg.v={};lg.v.status=lg.v.status===val?null:val;saveNow(pid);rPats();}
+function sVConscious(pid,sh,val){const lg=eLog(pid,curDate,sh);if(!lg.v)lg.v={};lg.v.conscious=lg.v.conscious===val?null:val;saveNow(pid);}
+function sVMood(pid,sh,val){const lg=eLog(pid,curDate,sh);if(!lg.v)lg.v={};lg.v.mood=lg.v.mood===val?null:val;saveNow(pid);}
 function sWoundNote(pid,sh,v){const lg=eLog(pid,curDate,sh);lg.woundNote=v;saveNow(pid);}
 function toggleParrot(pid,sh){
   const lg=eLog(pid,curDate,sh);
@@ -2016,6 +2020,14 @@ function rShift(p,sh,lg){
   }
   h+=`<div class="opts" style="margin-top:6px">
     ${['ปกติ','ต้องดูแล','เฝ้าระวัง','ส่งหมอ'].map(s=>`<button class="opt o${s==='ปกติ'?'g':s==='ส่งหมอ'?'r':'o'} ${(lg.v&&lg.v.status)===s?'sel':''}" onclick="sVSStatus(${p.id},'${sh}','${s}')">${s}</button>`).join('')}
+  </div>`;
+  h+=`<div class="sl" style="margin-top:8px">🧠 การรู้สึกตัว</div>
+  <div class="opts">
+    ${['รู้สึกตัวดี','หลง','สับสน','ซึม'].map(s=>`<button class="opt og ${(lg.v&&lg.v.conscious)===s?'sel':''}" onclick="sVConscious(${p.id},'${sh}','${s}')">${s}</button>`).join('')}
+  </div>
+  <div class="sl" style="margin-top:8px">😊 อารมณ์</div>
+  <div class="opts">
+    ${['ยิ้มแย้มแจ่มใส','หงุดหงิด','เฉยๆ'].map(s=>`<button class="opt og ${(lg.v&&lg.v.mood)===s?'sel':''}" onclick="sVMood(${p.id},'${sh}','${s}')">${s}</button>`).join('')}
   </div>`;
 
   // Parrot form
@@ -2129,8 +2141,8 @@ function rShift(p,sh,lg){
   const isFeed=foodMode==='feed';
   h+=`<div class="dvr"></div><div class="sl">🍽️ มื้ออาหาร</div>
   <div class="opts" style="margin-bottom:6px">
-    <button class="opt og ${foodMode==='normal'?'sel':''}" onclick="sFoodMode(${p.id},'${sh}','normal')">🍚 อาหารปกติ</button>
-    <button class="opt or ${isFeed?'sel':''}" onclick="sFoodMode(${p.id},'${sh}','feed')">🔴 Feed (สายยาง)</button>
+    <button class="opt og ${foodMode==='normal'?'sel':''}" onclick="sFoodMode(${p.id},'${sh}','normal')">🍚 อาหาร</button>
+    <button class="opt or ${isFeed?'sel':''}" onclick="sFoodMode(${p.id},'${sh}','feed')">🔴 อาหารทางสายยาง</button>
   </div>`;
   if(isFeed){
     const feedMeals=sh==='D'?[{k:'feed08',l:'🕗 08:00'},{k:'feed12',l:'🕛 12:00'}]:[{k:'feed16',l:'🕓 16:00'},{k:'feed20',l:'🕗 20:00'}];
@@ -2149,6 +2161,11 @@ function rShift(p,sh,lg){
       </div>`;
     });
   } else {
+    // ประเภทอาหาร
+    const foodSubType=lg.foodSubType||null;
+    h+=`<div class="opts" style="margin:4px 0 6px">
+      ${['อาหารธรรมดา','อาหารอ่อน','อาหารเหลว'].map(t=>`<button class="opt og ${foodSubType===t?'sel':''}" onclick="sFoodSubType(${p.id},'${sh}','${t}')">${t}</button>`).join('')}
+    </div>`;
     const meals=sh==='D'?[{k:'breakfast',l:'🌅 อาหารเช้า'},{k:'lunch',l:'☀️ อาหารเที่ยง'}]:[{k:'dinner',l:'🌙 อาหารเย็น'}];
     meals.forEach(meal=>{
       const fd=(lg.food||{})[meal.k]||{};
@@ -3006,7 +3023,7 @@ function buildRepText(){
     if(shifts.includes('D'))tD+=gLog(p.id,curDate,'D').pampers||0;
     if(shifts.includes('N'))tN+=gLog(p.id,getShiftDate('N'),'N').pampers||0;
   });
-  if(tD+tN>0){rep+=`👶 สรุปแพมเพิสทั้งศูนย์\n`;if(shifts.includes('D'))rep+=`  เวร D (${fmtShort(curDate)}): ${tD} ตัว\n`;if(shifts.includes('N'))rep+=`  เวร N (${fmtShort(getShiftDate('N'))}): ${tN} ตัว\n`;rep+=`  รวม: ${tD+tN} ตัว\n\n`;}
+  if(tD+tN>0){rep+=`👶 รายงานสรุปแพมเพิสประจำวัน\n`;if(shifts.includes('D'))rep+=`  เวร D (${fmtShort(curDate)}): ${tD} ตัว\n`;if(shifts.includes('N'))rep+=`  เวร N (${fmtShort(getShiftDate('N'))}): ${tN} ตัว\n`;rep+=`  รวม: ${tD+tN} ตัว\n\n`;}
   // supply items
   const fpidSup=document.getElementById('expat').value;
   const supPats=fpidSup?S.patients.filter(p=>p.id==fpidSup):S.patients;
