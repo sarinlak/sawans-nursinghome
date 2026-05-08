@@ -2022,7 +2022,7 @@ function rShift(p,sh,lg){
   </div>`;
   h+=`<div class="sl" style="margin-top:8px">🧠 การรู้สึกตัว</div>
   <div class="opts">
-    ${['รู้สึกตัวดี','หลง','สับสน','ซึม'].map(s=>`<button class="opt og ${(lg.v&&lg.v.conscious)===s?'sel':''}" onclick="sVConscious(${p.id},'${sh}','${s}')">${s}</button>`).join('')}
+    ${['รู้สึกตัวดี','รู้สึกตัว','หลง','สับสน','ซึม'].map(s=>`<button class="opt og ${(lg.v&&lg.v.conscious)===s?'sel':''}" onclick="sVConscious(${p.id},'${sh}','${s}')">${s}</button>`).join('')}
   </div>
   <div class="sl" style="margin-top:8px">😊 อารมณ์</div>
   <div class="opts">
