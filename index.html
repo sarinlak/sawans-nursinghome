@@ -2160,17 +2160,13 @@ function rShift(p,sh,lg){
       </div>`;
     });
   } else {
-    // ประเภทอาหาร
-    const foodSubType=lg.foodSubType||null;
-    h+=`<div class="opts" style="margin:4px 0 6px">
-      ${['อาหารธรรมดา','อาหารอ่อน','อาหารเหลว'].map(t=>`<button class="opt og ${foodSubType===t?'sel':''}" onclick="sFoodSubType(${p.id},'${sh}','${t}')">${t}</button>`).join('')}
-    </div>`;
     const meals=sh==='D'?[{k:'breakfast',l:'🌅 อาหารเช้า'},{k:'lunch',l:'☀️ อาหารเที่ยง'}]:[{k:'dinner',l:'🌙 อาหารเย็น'}];
     meals.forEach(meal=>{
       const fd=(lg.food||{})[meal.k]||{};
-      const fo=(p.foods&&p.foods.length)?p.foods:['อาหารปกติ'];
+      // ตัวเลือกประเภทอาหารอยู่ในแต่ละมื้อ
+      const foodTypes=['อาหารธรรมดา','อาหารอ่อน','อาหารเหลว'];
       h+=`<div class="fbox"><div style="font-size:12px;font-weight:600;margin-bottom:4px">${meal.l}</div>
-        <div class="opts">${fo.map(ft=>`<button class="opt oo ${fd.type===ft?'sel':''}" onclick="sFoodT(${p.id},'${sh}','${meal.k}','${ft.replace(/'/g,"\\'")}')">${ft}</button>`).join('')}</div>
+        <div class="opts">${foodTypes.map(ft=>`<button class="opt oo ${fd.type===ft?'sel':''}" onclick="sFoodT(${p.id},'${sh}','${meal.k}','${ft.replace(/'/g,"\\'")}')">${ft}</button>`).join('')}</div>
         <div class="food-row">
           <button class="food-btn ${fd.amount==='หมดถาด'?'fsel':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','amount','หมดถาด')">🍽️ หมดถาด</button>
           <button class="food-btn ${fd.amount==='2 ถาด'?'fsel':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','amount','2 ถาด')">🍽️🍽️ 2 ถาด</button>
