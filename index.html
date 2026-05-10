@@ -579,6 +579,11 @@ body{font-family:Sarabun,sans-serif;background:var(--bg);color:var(--text);min-h
   <div class="fl"><div class="fll">📅 วันเดือนปีเกิด</div><input class="fi" id="pDob" type="date"></div>
   <div class="fl"><div class="fll">📅 วันที่เข้าพักศูนย์ (ใช้คำนวณรอบบิล)</div><input class="fi" id="pAdmit" type="date"></div>
   <div class="fl"><div class="fll">โรค / ความเสี่ยง</div><input class="fi" id="pdia" placeholder="เช่น เบาหวาน ความดัน"></div>
+  <div class="fl">
+    <div class="fll">🏥 ประวัติการนอน รพ./ข้อควรทราบ <span style="font-size:11px;color:var(--muted)">(กดเพิ่มได้หลายข้อ)</span></div>
+    <div id="hospHistoryList" style="margin-bottom:6px"></div>
+    <button type="button" class="btn" style="font-size:13px;padding:6px 12px" onclick="addHospHistory()">+ เพิ่มข้อมูล</button>
+  </div>
   <div class="fl"><div class="fll">🚨 โรงพยาบาลกรณีฉุกเฉิน</div><input class="fi" id="pEmergHosp" placeholder="เช่น รพ.นครสวรรค์ โทร 056-XXXXXX"></div>
   <div class="fl"><div class="fll">📌 หมายเหตุประจำตัว <span style="font-size:11px;color:var(--muted)">(แสดงด้านหน้าชื่อ เช่น ระวังหกล้ม)</span></div>
     <input class="fi" id="pNote" placeholder="เช่น ระวังพลัดตก / แพ้ยา Penicillin / ต้องการความเงียบ"></div>
@@ -1439,6 +1444,8 @@ function _oEditP(pid){
   document.getElementById('pAdmit').value=p.admitDate||'';
   document.getElementById('pDob').value=p.dob||'';
   document.getElementById('pEmergHosp').value=p.emergHosp||'';
+  // โหลด hospHistory
+  setTimeout(function(){renderHospHistoryList();},50);
   document.getElementById('pNote').value=p.patNote||'';
   document.querySelectorAll('#moP .chip').forEach(c=>c.classList.remove('sel'));
   (p.foods||[]).forEach(f=>{const el=document.querySelector(`#fchips [data-f="${f}"]`);if(el)el.classList.add('sel');});
@@ -1461,16 +1468,17 @@ function saveP(){
   const dob=document.getElementById('pDob').value;
   const emergHosp=document.getElementById('pEmergHosp').value.trim();
   const patNote=document.getElementById('pNote').value.trim();
+  const hospHistory=(getTmpPat().hospHistory||[]).filter(h=>h.trim());
   const admit=document.getElementById('pAdmit').value;
   // first appointment for backward compat
   const appt=(appointments[0]?appointments[0].date:'');const doc=(appointments[0]?appointments[0].doctor:'');
   if(editPid){
     const p=S.patients.find(x=>x.id===editPid);
-    if(p)Object.assign(p,{name,age:document.getElementById('page').value,room:document.getElementById('proo').value.trim(),diag:document.getElementById('pdia').value.trim(),foods,tasksD,tasksN,medications,appointments,appointment:appt,doctor:doc,admitDate:admit,dob,emergHosp,patNote});
+    if(p)Object.assign(p,{name,age:document.getElementById('page').value,room:document.getElementById('proo').value.trim(),diag:document.getElementById('pdia').value.trim(),foods,tasksD,tasksN,medications,appointments,appointment:appt,doctor:doc,admitDate:admit,dob,emergHosp,patNote,hospHistory});
     save();cModal('moP');renderAll();toast('บันทึกข้อมูลเรียบร้อย ✅');
   } else {
     const id=Date.now();
-    S.patients.push({id,name,age:document.getElementById('page').value,room:document.getElementById('proo').value.trim(),diag:document.getElementById('pdia').value.trim(),foods,tasksD,tasksN,medications,appointments,appointment:appt,doctor:doc,admitDate:admit,dob,emergHosp,patNote,medHistory:[]});
+    S.patients.push({id,name,age:document.getElementById('page').value,room:document.getElementById('proo').value.trim(),diag:document.getElementById('pdia').value.trim(),foods,tasksD,tasksN,medications,appointments,appointment:appt,doctor:doc,admitDate:admit,dob,emergHosp,patNote,hospHistory,medHistory:[]});
     aSh[id]='D';save();cModal('moP');renderAll();
     toast('เพิ่มผู้สูงอายุแล้ว! ประเมิน Barthel ADL 📋');
     setTimeout(()=>openADL(id),300);
@@ -1941,6 +1949,46 @@ function sVSDebounce(pid,sh,field,val){
   vsTimers[key]=setTimeout(function(){S._savedAt=Date.now();save();},800);
 }
 function sVSMain(pid,sh,field,val){sVSDebounce(pid,sh,field,val);}
+function renderHospHistoryList(){
+  const p=getTmpPat();
+  const list=p.hospHistory||[];
+  const el=document.getElementById('hospHistoryList');
+  if(!el)return;
+  el.innerHTML=list.map((h,i)=>`
+    <div style="display:flex;gap:6px;margin-bottom:4px">
+      <input class="fi" style="flex:1;margin:0" value="${h.replace(/"/g,'&quot;')}" oninput="updateHospHistory(${i},this.value)" placeholder="เช่น ผ่าตัดเปลี่ยนข้อเข่า 2020">
+      <button type="button" onclick="removeHospHistory(${i})" style="background:var(--rose);color:#fff;border:none;border-radius:8px;padding:4px 10px;cursor:pointer">ลบ</button>
+    </div>`).join('');
+}
+function addHospHistory(){
+  const p=getTmpPat();
+  if(!p.hospHistory)p.hospHistory=[];
+  p.hospHistory.push('');
+  renderHospHistoryList();
+  // focus ช่องใหม่
+  setTimeout(function(){
+    const inputs=document.querySelectorAll('#hospHistoryList input');
+    if(inputs.length)inputs[inputs.length-1].focus();
+  },50);
+}
+function updateHospHistory(i,val){
+  const p=getTmpPat();
+  if(!p.hospHistory)p.hospHistory=[];
+  p.hospHistory[i]=val;
+}
+function removeHospHistory(i){
+  const p=getTmpPat();
+  if(!p.hospHistory)return;
+  p.hospHistory.splice(i,1);
+  renderHospHistoryList();
+}
+function getTmpPat(){
+  // ดึง patient ที่กำลังแก้ไขอยู่ผ่าน editPid global variable
+  if(typeof editPid!=='undefined'&&editPid){
+    return S.patients.find(p=>String(p.id)===String(editPid))||{hospHistory:[]};
+  }
+  return {hospHistory:[]};
+}
 function sVSStatus(pid,sh,val){const lg=eLog(pid,curDate,sh);if(!lg.v)lg.v={};lg.v.status=lg.v.status===val?null:val;saveNow(pid);rPats();}
 function sVConscious(pid,sh,val){const lg=eLog(pid,curDate,sh);if(!lg.v)lg.v={};lg.v.conscious=lg.v.conscious===val?null:val;saveNow(pid);}
 function sVMood(pid,sh,val){const lg=eLog(pid,curDate,sh);if(!lg.v)lg.v={};lg.v.mood=lg.v.mood===val?null:val;saveNow(pid);}
@@ -2734,6 +2782,7 @@ function rHist(){
 
     <div class="hv-row"><span class="hv-lbl">📅 วันเกิด</span><span class="hv-val">${dobStr}</span></div>
     <div class="hv-row"><span class="hv-lbl">🩺 โรคประจำตัว</span><span class="hv-val">${p.diag||'ไม่ระบุ'}</span></div>
+    ${(p.hospHistory&&p.hospHistory.length)?`<div class="hv-row" style="align-items:flex-start"><span class="hv-lbl">🏥 ประวัติการนอน รพ./ข้อควรทราบ</span><span class="hv-val"><ul style="margin:0;padding-left:16px">${p.hospHistory.map(h=>`<li>${h}</li>`).join('')}</ul></span></div>`:''}
     <div class="hv-row"><span class="hv-lbl">🚨 รพ.ฉุกเฉิน</span><span class="hv-val" style="color:var(--rose);font-weight:600">${p.emergHosp||'ไม่ระบุ'}</span></div>
 
     <div class="dvr"></div>
