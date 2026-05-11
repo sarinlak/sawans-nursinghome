@@ -2211,16 +2211,9 @@ function rShift(p,sh,lg){
       </div>`;
     });
   } else {
-    const meals=sh==='D'?[{k:'breakfast',l:'🌅 อาหารเช้า'},{k:'lunch',l:'☀️ อาหารเที่ยง'},{k:'snack',l:'🍊 อาหารเบรค'}]:[{k:'dinner',l:'🌙 อาหารเย็น'}];
+    const meals=sh==='D'?[{k:'breakfast',l:'🌅 อาหารเช้า'},{k:'lunch',l:'☀️ อาหารเที่ยง'}]:[{k:'dinner',l:'🌙 อาหารเย็น'}];
     meals.forEach(meal=>{
       const fd=(lg.food||{})[meal.k]||{};
-      if(meal.k==='snack'){
-        // อาหารเบรค — แค่ช่องรายละเอียด
-        h+=`<div class="fbox"><div style="font-size:12px;font-weight:600;margin-bottom:4px">${meal.l}</div>
-          <div class="frow"><input class="finp" placeholder="รายละเอียด เช่น คุกกี้ นม ผลไม้" value="${fd.detail||''}" onchange="sFoodD(${p.id},'${sh}','${meal.k}','detail',this.value)"></div>
-        </div>`;
-        return;
-      }
       // ตัวเลือกประเภทอาหารอยู่ในแต่ละมื้อ
       const foodTypes=['อาหารธรรมดา','อาหารอ่อน','อาหารเหลว'];
       h+=`<div class="fbox"><div style="font-size:12px;font-weight:600;margin-bottom:4px">${meal.l}</div>
@@ -2238,6 +2231,14 @@ function rShift(p,sh,lg){
         <div class="frow"><input class="finp" placeholder="รายละเอียดเพิ่มเติม" value="${fd.detail||''}" onchange="sFoodD(${p.id},'${sh}','${meal.k}','detail',this.value)"></div>
       </div>`;
     });
+    // อาหารเบรค — แสดงเฉพาะเวร D และไม่ใช่ feed
+    if(sh==='D'){
+      const snackFd=(lg.food||{}).snack||{};
+      h+=`<div class="fbox" style="margin-top:4px">
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px">🍊 อาหารเบรค <span style="font-size:11px;color:var(--muted)">(ถ้ามี)</span></div>
+        <div class="frow"><input class="finp" placeholder="เช่น คุกกี้ นม ผลไม้ (เว้นว่างถ้าไม่มี)" value="${snackFd.detail||''}" onchange="sFoodD(${p.id},'${sh}','snack','detail',this.value)"></div>
+      </div>`;
+    }
   }
 
   // Pampers
@@ -3044,7 +3045,7 @@ function buildRepText(){
           else if(fd.feedDone===false)rep+=`🔴 Feed ${ml.l}${formula}: ❌ ไม่ครบ${fd.feedNote?' — '+fd.feedNote:''}\n`;
         });
       } else {
-        const mealsList=sh==='D'?[{k:'breakfast',l:'เช้า'},{k:'lunch',l:'เที่ยง'},{k:'snack',l:'เบรค'}]:[{k:'dinner',l:'เย็น'}];
+        const mealsList=sh==='D'?[{k:'breakfast',l:'เช้า'},{k:'lunch',l:'เที่ยง'}]:[{k:'dinner',l:'เย็น'}];
         mealsList.forEach(ml=>{
           const fd=lg.food?.[ml.k]||{};
           if(fd.type||fd.amount){
@@ -3056,6 +3057,11 @@ function buildRepText(){
             rep+=foodLine+'\n';
           }
         });
+        // อาหารเบรค — แสดงเฉพาะถ้ามีข้อมูล
+        if(sh==='D'){
+          const snackFd=lg.food?.snack||{};
+          if(snackFd.detail)rep+=`🍊 อาหารเบรค: ${snackFd.detail}\n`;
+        }
       }
       // PT and activities (D shift only)
       if(sh==='D'){
