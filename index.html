@@ -1711,7 +1711,7 @@ function uPct(pid){
   const lg=gLog(pid,curDate,sh);
   const defaultT=sh==='D'?DEFAULT_TASKS_D:DEFAULT_TASKS_N;
   const customT=sh==='D'?(p.tasksD||[]):(p.tasksN||[]);
-  const tasks=customT.length?[...customT,...defaultT.filter(function(t){return!customT.includes(t);})]:[...defaultT];
+  const tasks=(customT.length?[...customT,...defaultT.filter(function(t){return!customT.includes(t);})]:[...defaultT]).filter(function(t){return t!=='อาหารเบรค';});
   const shMeds=getMedsForShift(p,sh);
   const tDone=tasks.filter(function(t){return lg.tasks&&lg.tasks[t];}).length;
   const mDone=shMeds.filter(function(m){return lg.meds&&lg.meds['sh_med||'+m.name];}).length;
@@ -1744,7 +1744,7 @@ function rPatsHeader(){
     const shMeds=getMedsForShift(p,sh);
     const defaultT=sh==='D'?DEFAULT_TASKS_D:DEFAULT_TASKS_N;
     const customT=sh==='D'?(p.tasksD||[]):(p.tasksN||[]);
-    const tasks=customT.length?[...customT,...defaultT.filter(t=>!customT.includes(t))]:defaultT;
+    const tasks=(customT.length?[...customT,...defaultT.filter(t=>!customT.includes(t))]:defaultT).filter(t=>t!=='อาหารเบรค');
     const tDone=tasks.filter(function(t){return lg.tasks&&lg.tasks[t];}).length;
     const mDone=shMeds.filter(function(m){return lg.meds&&lg.meds['sh_med||'+m.name];}).length;
     const total=tasks.length+shMeds.length,done=tDone+mDone;
@@ -1765,7 +1765,7 @@ function rPats(){
     const defaultT=sh==='D'?DEFAULT_TASKS_D:DEFAULT_TASKS_N;
   const customT=sh==='D'?(p.tasksD||[]):(p.tasksN||[]);
   // รวม custom tasks กับ default — เพิ่มรายการใหม่ที่ยังไม่มีในรายการของผู้สูงอายุคนนี้
-  const tasks=customT.length?[...customT,...defaultT.filter(t=>!customT.includes(t))]:defaultT;
+  const tasks=(customT.length?[...customT,...defaultT.filter(t=>!customT.includes(t))]:defaultT).filter(t=>t!=='อาหารเบรค');
     const shMeds=getMedsForShift(p,sh);
     const tDone=tasks.filter(function(t){return lg.tasks&&lg.tasks[t];}).length;
     const mDone=shMeds.filter(function(m){return lg.meds&&lg.meds['sh_med||'+m.name];}).length;
@@ -2043,7 +2043,7 @@ function rShift(p,sh,lg){
   const defaultT=sh==='D'?DEFAULT_TASKS_D:DEFAULT_TASKS_N;
   const customT=sh==='D'?(p.tasksD||[]):(p.tasksN||[]);
   // รวม custom tasks กับ default — เพิ่มรายการใหม่ที่ยังไม่มีในรายการของผู้สูงอายุคนนี้
-  const tasks=customT.length?[...customT,...defaultT.filter(t=>!customT.includes(t))]:defaultT;
+  const tasks=(customT.length?[...customT,...defaultT.filter(t=>!customT.includes(t))]:defaultT).filter(t=>t!=='อาหารเบรค');
 
   // ADL + emergency info
   if(p.adl&&p.adl.score!==undefined){
@@ -2214,10 +2214,17 @@ function rShift(p,sh,lg){
     const meals=sh==='D'?[{k:'breakfast',l:'🌅 อาหารเช้า'},{k:'lunch',l:'☀️ อาหารเที่ยง'},{k:'snack',l:'🍊 อาหารเบรค'}]:[{k:'dinner',l:'🌙 อาหารเย็น'}];
     meals.forEach(meal=>{
       const fd=(lg.food||{})[meal.k]||{};
+      if(meal.k==='snack'){
+        // อาหารเบรค — แค่ช่องรายละเอียด
+        h+=`<div class="fbox"><div style="font-size:12px;font-weight:600;margin-bottom:4px">${meal.l}</div>
+          <div class="frow"><input class="finp" placeholder="รายละเอียด เช่น คุกกี้ นม ผลไม้" value="${fd.detail||''}" onchange="sFoodD(${p.id},'${sh}','${meal.k}','detail',this.value)"></div>
+        </div>`;
+        return;
+      }
       // ตัวเลือกประเภทอาหารอยู่ในแต่ละมื้อ
       const foodTypes=['อาหารธรรมดา','อาหารอ่อน','อาหารเหลว'];
       h+=`<div class="fbox"><div style="font-size:12px;font-weight:600;margin-bottom:4px">${meal.l}</div>
-        <div class="opts">${foodTypes.map(ft=>`<button class="opt oo ${fd.type===ft?'sel':''}" onclick="sFoodT(${p.id},'${sh}','${meal.k}','${ft.replace(/'/g,"\\'")}')">${ft}</button>`).join('')}</div>
+        <div class="opts">${foodTypes.map(ft=>`<button class="opt oo ${fd.type===ft?'sel':''}" onclick="sFoodT(${p.id},'${sh}','${meal.k}','${ft.replace(/'/g,"\'")}')">${ft}</button>`).join('')}</div>
         <div class="food-row">
           <button class="food-btn ${fd.amount==='หมดถาด'?'fsel':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','amount','หมดถาด')">🍽️ หมดถาด</button>
           <button class="food-btn ${fd.amount==='2 ถาด'?'fsel':''}" onclick="sFoodD(${p.id},'${sh}','${meal.k}','amount','2 ถาด')">🍽️🍽️ 2 ถาด</button>
