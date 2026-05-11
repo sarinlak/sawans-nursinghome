@@ -585,6 +585,8 @@ body{font-family:Sarabun,sans-serif;background:var(--bg);color:var(--text);min-h
     <button type="button" class="btn" style="font-size:13px;padding:6px 12px" onclick="addHospHistory()">+ เพิ่มข้อมูล</button>
   </div>
   <div class="fl"><div class="fll">🚨 โรงพยาบาลกรณีฉุกเฉิน</div><input class="fi" id="pEmergHosp" placeholder="เช่น รพ.นครสวรรค์ โทร 056-XXXXXX"></div>
+  <div class="fl"><div class="fll">⚠️ ประวัติแพ้ยา/อาหาร</div>
+    <input class="fi" id="pAllergy" placeholder="เช่น แพ้ Penicillin, แพ้อาหารทะเล"></div>
   <div class="fl"><div class="fll">📌 หมายเหตุประจำตัว <span style="font-size:11px;color:var(--muted)">(แสดงด้านหน้าชื่อ เช่น ระวังหกล้ม)</span></div>
     <input class="fi" id="pNote" placeholder="เช่น ระวังพลัดตก / แพ้ยา Penicillin / ต้องการความเงียบ"></div>
   <div class="subh" style="color:var(--purple);margin-top:6px">🗓️ นัดพบแพทย์ (เพิ่มได้หลายนัด)</div>
@@ -713,7 +715,6 @@ let cachedPIN=''; // ต้องอยู่ด้านบนก่อน getS
 const DEFAULT_TASKS_D=[
   'วัดสัญญาณชีพรอบ 10.00น.',
   'อาหารเช้า',
-  'อาหารเบรค',
   'บริหารลิ้นหลังอาหารเช้า',
   'อาหารกลางวัน',
   'ออกกำลังกายท่านั่ง 40 นาที',
@@ -1444,6 +1445,7 @@ function _oEditP(pid){
   document.getElementById('pAdmit').value=p.admitDate||'';
   document.getElementById('pDob').value=p.dob||'';
   document.getElementById('pEmergHosp').value=p.emergHosp||'';
+  if(document.getElementById('pAllergy'))document.getElementById('pAllergy').value=p.allergy||'';
   // โหลด hospHistory
   setTimeout(function(){renderHospHistoryList();},50);
   document.getElementById('pNote').value=p.patNote||'';
@@ -1468,17 +1470,18 @@ function saveP(){
   const dob=document.getElementById('pDob').value;
   const emergHosp=document.getElementById('pEmergHosp').value.trim();
   const patNote=document.getElementById('pNote').value.trim();
+  const allergy=document.getElementById('pAllergy')?document.getElementById('pAllergy').value.trim():'';
   const hospHistory=(getTmpPat().hospHistory||[]).filter(h=>h.trim());
   const admit=document.getElementById('pAdmit').value;
   // first appointment for backward compat
   const appt=(appointments[0]?appointments[0].date:'');const doc=(appointments[0]?appointments[0].doctor:'');
   if(editPid){
     const p=S.patients.find(x=>x.id===editPid);
-    if(p)Object.assign(p,{name,age:document.getElementById('page').value,room:document.getElementById('proo').value.trim(),diag:document.getElementById('pdia').value.trim(),foods,tasksD,tasksN,medications,appointments,appointment:appt,doctor:doc,admitDate:admit,dob,emergHosp,patNote,hospHistory});
+    if(p)Object.assign(p,{name,age:document.getElementById('page').value,room:document.getElementById('proo').value.trim(),diag:document.getElementById('pdia').value.trim(),foods,tasksD,tasksN,medications,appointments,appointment:appt,doctor:doc,admitDate:admit,dob,emergHosp,patNote,allergy,hospHistory});
     save();cModal('moP');renderAll();toast('บันทึกข้อมูลเรียบร้อย ✅');
   } else {
     const id=Date.now();
-    S.patients.push({id,name,age:document.getElementById('page').value,room:document.getElementById('proo').value.trim(),diag:document.getElementById('pdia').value.trim(),foods,tasksD,tasksN,medications,appointments,appointment:appt,doctor:doc,admitDate:admit,dob,emergHosp,patNote,hospHistory,medHistory:[]});
+    S.patients.push({id,name,age:document.getElementById('page').value,room:document.getElementById('proo').value.trim(),diag:document.getElementById('pdia').value.trim(),foods,tasksD,tasksN,medications,appointments,appointment:appt,doctor:doc,admitDate:admit,dob,emergHosp,patNote,allergy,hospHistory,medHistory:[]});
     aSh[id]='D';save();cModal('moP');renderAll();
     toast('เพิ่มผู้สูงอายุแล้ว! ประเมิน Barthel ADL 📋');
     setTimeout(()=>openADL(id),300);
@@ -2208,7 +2211,7 @@ function rShift(p,sh,lg){
       </div>`;
     });
   } else {
-    const meals=sh==='D'?[{k:'breakfast',l:'🌅 อาหารเช้า'},{k:'lunch',l:'☀️ อาหารเที่ยง'}]:[{k:'dinner',l:'🌙 อาหารเย็น'}];
+    const meals=sh==='D'?[{k:'breakfast',l:'🌅 อาหารเช้า'},{k:'lunch',l:'☀️ อาหารเที่ยง'},{k:'snack',l:'🍊 อาหารเบรค'}]:[{k:'dinner',l:'🌙 อาหารเย็น'}];
     meals.forEach(meal=>{
       const fd=(lg.food||{})[meal.k]||{};
       // ตัวเลือกประเภทอาหารอยู่ในแต่ละมื้อ
@@ -2782,6 +2785,8 @@ function rHist(){
 
     <div class="hv-row"><span class="hv-lbl">📅 วันเกิด</span><span class="hv-val">${dobStr}</span></div>
     <div class="hv-row"><span class="hv-lbl">🩺 โรคประจำตัว</span><span class="hv-val">${p.diag||'ไม่ระบุ'}</span></div>
+    ${p.allergy?`<div class="hv-row"><span class="hv-lbl">⚠️ แพ้ยา/อาหาร</span><span class="hv-val" style="color:var(--rose);font-weight:600">${p.allergy}</span></div>`:''}
+    ${p.patNote?`<div class="hv-row"><span class="hv-lbl">📌 หมายเหตุ</span><span class="hv-val">${p.patNote}</span></div>`:''}
     ${(p.hospHistory&&p.hospHistory.length)?`<div class="hv-row" style="align-items:flex-start"><span class="hv-lbl">🏥 ประวัติการนอน รพ./ข้อควรทราบ</span><span class="hv-val"><ul style="margin:0;padding-left:16px">${p.hospHistory.map(h=>`<li>${h}</li>`).join('')}</ul></span></div>`:''}
     <div class="hv-row"><span class="hv-lbl">🚨 รพ.ฉุกเฉิน</span><span class="hv-val" style="color:var(--rose);font-weight:600">${p.emergHosp||'ไม่ระบุ'}</span></div>
 
@@ -3032,7 +3037,7 @@ function buildRepText(){
           else if(fd.feedDone===false)rep+=`🔴 Feed ${ml.l}${formula}: ❌ ไม่ครบ${fd.feedNote?' — '+fd.feedNote:''}\n`;
         });
       } else {
-        const mealsList=sh==='D'?[{k:'breakfast',l:'เช้า'},{k:'lunch',l:'เที่ยง'}]:[{k:'dinner',l:'เย็น'}];
+        const mealsList=sh==='D'?[{k:'breakfast',l:'เช้า'},{k:'lunch',l:'เที่ยง'},{k:'snack',l:'เบรค'}]:[{k:'dinner',l:'เย็น'}];
         mealsList.forEach(ml=>{
           const fd=lg.food?.[ml.k]||{};
           if(fd.type||fd.amount){
