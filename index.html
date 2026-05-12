@@ -1478,11 +1478,11 @@ function saveP(){
   if(editPid){
     const p=S.patients.find(x=>x.id===editPid);
     if(p)Object.assign(p,{name,age:document.getElementById('page').value,room:document.getElementById('proo').value.trim(),diag:document.getElementById('pdia').value.trim(),foods,tasksD,tasksN,medications,appointments,appointment:appt,doctor:doc,admitDate:admit,dob,emergHosp,patNote,allergy,hospHistory});
-    save();cModal('moP');renderAll();toast('บันทึกข้อมูลเรียบร้อย ✅');
+    save();pushToFirebase();cModal('moP');renderAll();toast('บันทึกข้อมูลเรียบร้อย ✅');
   } else {
     const id=Date.now();
     S.patients.push({id,name,age:document.getElementById('page').value,room:document.getElementById('proo').value.trim(),diag:document.getElementById('pdia').value.trim(),foods,tasksD,tasksN,medications,appointments,appointment:appt,doctor:doc,admitDate:admit,dob,emergHosp,patNote,allergy,hospHistory,medHistory:[]});
-    aSh[id]='D';save();cModal('moP');renderAll();
+    aSh[id]='D';save();pushToFirebase();cModal('moP');renderAll();
     toast('เพิ่มผู้สูงอายุแล้ว! ประเมิน Barthel ADL 📋');
     setTimeout(()=>openADL(id),300);
   }
