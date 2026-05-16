@@ -1665,7 +1665,7 @@ function saveReMed(){
   p.medications=newMeds;
   if(doc)p.doctor=doc;
   if(appt)p.appointment=appt;
-  save();cModal('moReMed');renderAll();rApptAlerts();toast('บันทึกใบยาใหม่เรียบร้อย ✅');
+  save();pushToFirebase();cModal('moReMed');renderAll();rApptAlerts();toast('บันทึกใบยาใหม่เรียบร้อย ✅');
 }
 function openMedHist(pid){
   const p=S.patients.find(x=>x.id===pid);if(!p)return;
@@ -1949,7 +1949,7 @@ function sVSDebounce(pid,sh,field,val){
   try{const{photos,...d}=S;localStorage.setItem(DK,JSON.stringify(d));}catch(e){}
   const key='vs_'+pid+'_'+sh+'_'+field;
   clearTimeout(vsTimers[key]);
-  vsTimers[key]=setTimeout(function(){S._savedAt=Date.now();save();},800);
+  vsTimers[key]=setTimeout(function(){saveNow(pid);},800);
 }
 function sVSMain(pid,sh,field,val){sVSDebounce(pid,sh,field,val);}
 function renderHospHistoryList(){
@@ -2306,10 +2306,7 @@ function sVS(pid,sh,time,field,val){
   // debounce Firebase push 800ms
   const key='vs_'+pid+'_'+sh+'_'+time+'_'+field;
   clearTimeout(vsTimers[key]);
-  vsTimers[key]=setTimeout(function(){
-    S._savedAt=Date.now(); // ต้อง set ก่อน push เพื่อให้เครื่องอื่นรับได้
-    save();
-  },800);
+  vsTimers[key]=setTimeout(function(){saveNow(pid);},800);
   // update chart
   const chartEl=document.getElementById('vs-chart-'+pid+'-'+sh);
   if(chartEl){const curLg=gLog(pid,curDate,sh);chartEl.outerHTML=rVSChart(pid,sh,curLg);}
