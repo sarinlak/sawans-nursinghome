@@ -1609,7 +1609,7 @@ function toggleMedMealEl(el){toggleMedMeal(el.dataset.eid,decodeURIComponent(el.
 function toggleMedDayEl(el){toggleMedDay(el.dataset.eid,parseInt(el.dataset.day),el.dataset.src);}
 function setMedMethodEl(el){setMedMethod(el.dataset.eid,el.dataset.method,el.dataset.src);}
 function setMedEyeSideEl(el){setMedEyeSide(el.dataset.eid,el.dataset.side,el.dataset.src);}
-function setMedEyeSide(id,val,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m){m.eyeSide=m.eyeSide===val?null:val;}src==='tmp'?renderMedEntries():renderReMedEntries();}{const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m){m.prn=val;if(val){m.meals=[];m.specificDays=false;}}src==='tmp'?renderMedEntries():renderReMedEntries();}
+function setMedEyeSide(id,val,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m){m.eyeSide=m.eyeSide===val?null:val;}src==='tmp'?renderMedEntries():renderReMedEntries();}
 function setMedEvenDays(id,val,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m){m.evenDays=val;if(val){m.prn=false;m.specificDays=false;}}src==='tmp'?renderMedEntries():renderReMedEntries();}
 function setMedPrn(id,val,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m){m.prn=val;if(val){m.meals=[];m.specificDays=false;m.evenDays=false;}}src==='tmp'?renderMedEntries():renderReMedEntries();}
 function setMedSpecificDays(id,val,src){const arr=src==='tmp'?tmpMeds:reMedTmp;const m=arr.find(x=>x.id===id);if(m){m.specificDays=val;if(!val)m.days=[];if(val){m.prn=false;m.evenDays=false;}}src==='tmp'?renderMedEntries():renderReMedEntries();}
